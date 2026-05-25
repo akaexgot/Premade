@@ -1,0 +1,346 @@
+================================================================
+MEMORIA DEL PROYECTO - TFG DAM 2025/2026
+PROYECTO: DuoQ (Premade)
+Plataforma de matching para jugadores de videojuegos
+================================================================
+
+[NOTA: Los apartados 1, 2, 22, 23, 24 los debes completar tú con
+tus datos personales, conclusiones propias y bibliografía]
+
+================================================================
+3. INTRODUCCIÓN
+================================================================
+
+DuoQ es una aplicación móvil multiplataforma desarrollada con
+Flutter cuyo objetivo es conectar a jugadores de videojuegos
+competitivos que buscan compañeros de equipo (duo, squad) con
+perfiles compatibles.
+
+La aplicación toma como inspiración el modelo de interacción de
+plataformas de citas como Tinder, adaptándolo al ecosistema
+gaming: en lugar de buscar pareja romántica, los usuarios buscan
+compañeros con quienes jugar partidas competitivas en títulos
+como League of Legends y Valorant.
+
+El nombre "DuoQ" hace referencia al término coloquial del mundo
+gamer "duo queue", que significa hacer cola en el modo clasificatorio
+de un videojuego acompañado de otro jugador.
+
+La aplicación permite a los usuarios:
+- Registrarse y crear un perfil de jugador completo
+- Indicar qué juegos practican, su rango y rol principal
+- Descubrir otros jugadores mediante un sistema de swipe
+- Chatear en tiempo real con los jugadores con quienes se ha
+  producido un match mutuo
+- Gestionar una lista de amigos y solicitudes de amistad
+- Buscar jugadores con filtros avanzados
+
+================================================================
+4. OBJETIVOS
+================================================================
+
+OBJETIVO GENERAL:
+Desarrollar una aplicación móvil funcional que permita a jugadores
+de videojuegos competitivos encontrar compañeros de equipo
+compatibles mediante un sistema de matching inteligente y
+comunicación en tiempo real.
+
+OBJETIVOS ESPECÍFICOS:
+
+1. Implementar un sistema de autenticación seguro con email/password
+   y OAuth con Google, delegando la seguridad a Supabase Auth.
+
+2. Diseñar y construir una base de datos PostgreSQL en Supabase con
+   Row Level Security que garantice la privacidad de los datos.
+
+3. Crear un sistema de matching tipo Tinder con algoritmo de
+   compatibilidad basado en juegos comunes, país y disponibilidad.
+
+4. Implementar un sistema de mensajería en tiempo real usando
+   Supabase Realtime (WebSockets).
+
+5. Desarrollar la arquitectura siguiendo el patrón Clean Architecture
+   con separación estricta en capas (Presentation, Application,
+   Domain, Data, Services).
+
+6. Gestionar el estado de la aplicación con Riverpod, implementando
+   StateNotifiers, FutureProviders y StreamProviders.
+
+7. Crear un sistema social completo: amigos, solicitudes de amistad,
+   bloqueos y notificaciones.
+
+8. Diseñar una interfaz moderna siguiendo Material Design 3 con
+   tipografía Inter (Google Fonts) y paleta de colores gaming.
+
+================================================================
+5. PROBLEMA QUE SOLUCIONA
+================================================================
+
+Los jugadores de videojuegos competitivos se enfrentan a un problema
+recurrente: encontrar compañeros de equipo de nivel similar, con
+el mismo estilo de juego y disponibilidad horaria compatible es
+extremadamente difícil utilizando los canales habituales (Discord,
+foros, redes sociales).
+
+Las plataformas genéricas como Discord obligan a unirse a servidores
+masivos donde la búsqueda de compañeros es caótica e ineficiente.
+Los sistemas de emparejamiento propios de los juegos solo funcionan
+en el momento de jugar, sin permitir establecer relaciones previas.
+
+DuoQ resuelve este problema proporcionando:
+
+- Un perfil de jugador estructurado: juego, rango, rol, estilo,
+  disponibilidad y ubicación geográfica.
+- Un algoritmo de compatibilidad que prioriza candidatos con más
+  juegos en común, mismo país y presencia online.
+- Una interfaz de descubrimiento intuitiva (swipe) que facilita
+  la exploración de candidatos.
+- Un canal de comunicación directa (chat en tiempo real) una vez
+  que se produce un match mutuo.
+- Un sistema social persistente para mantener contacto a largo plazo.
+
+================================================================
+8. TECNOLOGÍAS UTILIZADAS
+================================================================
+
+FRAMEWORK PRINCIPAL:
+- Flutter SDK >= 3.13.0
+- Dart SDK >= 3.0.0 < 4.0.0
+- Plataformas: Android (principal), Web (secundaria)
+
+BACKEND (BaaS):
+- Supabase (supabase_flutter ^2.12.4)
+  * PostgreSQL como base de datos relacional
+  * Supabase Auth para autenticación (JWT)
+  * Supabase Realtime para mensajería WebSocket
+  * Supabase Storage para almacenamiento de avatares
+
+GESTIÓN DE ESTADO:
+- Riverpod (riverpod ^2.4.0 / flutter_riverpod ^2.4.0)
+- riverpod_generator ^2.3.0 para generación de código
+
+NAVEGACIÓN:
+- Go Router ^13.0.0 (routing declarativo)
+
+MODELOS / SERIALIZACIÓN:
+- Freezed ^2.4.1 (clases inmutables y unión de tipos)
+- freezed_annotation ^2.4.1
+- json_serializable ^6.7.1
+- json_annotation ^4.8.1
+- build_runner ^2.4.6 (generación de código)
+
+PROGRAMACIÓN FUNCIONAL:
+- fpdart ^0.6.0 / dartz ^0.10.1 (patrón Either<Failure, T>)
+
+ALMACENAMIENTO LOCAL:
+- Hive ^2.2.3 + hive_flutter ^1.1.0 (caché local)
+- shared_preferences ^2.2.1
+
+NETWORKING:
+- Dio ^5.3.1 (cliente HTTP avanzado)
+- http ^1.1.0
+
+UI / DISEÑO:
+- Google Fonts ^6.1.0 (tipografía Inter)
+- flutter_svg ^2.0.7 (iconos vectoriales)
+- cupertino_icons ^1.0.2
+
+AUTENTICACIÓN:
+- google_sign_in ^6.1.5 (OAuth Google)
+- flutter_dotenv ^5.1.0 (variables de entorno)
+
+UTILIDADES:
+- image_picker ^1.0.4 (selector de imágenes para avatar)
+- intl ^0.19.0 (internacionalización)
+- uuid ^4.0.0 (generación de UUIDs)
+- logger ^2.0.1 (sistema de logs)
+- timeago ^3.5.0 (fechas relativas)
+
+HERRAMIENTAS DE DESARROLLO:
+- flutter_lints ^3.0.0
+- hive_generator ^2.0.0
+
+================================================================
+9. ARQUITECTURA DEL SISTEMA
+================================================================
+
+La aplicación implementa Clean Architecture dividida en 5 capas
+principales, garantizando separación de responsabilidades,
+testabilidad y mantenibilidad.
+
+ESTRUCTURA DE DIRECTORIOS:
+lib/
+├── main.dart                    (Punto de entrada)
+├── config/
+│   └── router/app_router.dart   (Rutas Go Router)
+├── core/
+│   ├── network/supabase_service.dart  (Singleton Supabase)
+│   ├── theme/                         (AppTheme, AppColors)
+│   ├── errors/failure.dart            (Clases de error)
+│   └── validators/                    (Validadores de formularios)
+├── domain/
+│   ├── entities/                      (Modelos Freezed)
+│   ├── repositories/                  (Interfaces)
+│   └── usecases/                      (Casos de uso)
+├── data/
+│   ├── datasources/                   (DataSources remotos)
+│   └── repositories/                  (Implementaciones)
+├── application/
+│   └── providers/                     (Providers Riverpod)
+└── presentation/
+    ├── pages/                         (Pantallas UI)
+    └── widgets/                       (Widgets reutilizables)
+
+CAPAS:
+
+1. PRESENTATION LAYER
+   Widgets Flutter con Material Design 3. Consume providers de
+   Riverpod mediante ConsumerWidget. Páginas: LoginPage,
+   RegisterPage, SplashPage, ProfileSetupPage, GameSelectionPage,
+   HomePage (swipe cards), SearchPage, FriendsPage, ChatPage,
+   ChatDetailPage, MyProfilePage, EditProfilePage, SettingsPage,
+   PublicProfilePage.
+   Navegación con barra inferior: Descubrir / Buscar / Social / Perfil.
+
+2. APPLICATION LAYER (Riverpod)
+   StateNotifiers, FutureProviders y StreamProviders. 30+ providers
+   que gestionan: autenticación, perfil, matching, chat, amigos.
+   Patrón: UI → Provider → UseCase → Repository.
+
+3. DOMAIN LAYER
+   Entidades Freezed inmutables (UserProfile, Conversation, Message,
+   Matching, Auth). 25+ Use Cases con patrón Either<Failure, T>.
+   Interfaces de repositorio que abstraen la capa de datos.
+
+4. DATA LAYER
+   Implementaciones de repositorios. Remote DataSources que llaman
+   a SupabaseService. Manejo de errores con Either<Failure, T>.
+
+5. SERVICES LAYER
+   SupabaseService: singleton que centraliza TODAS las operaciones
+   contra Supabase (auth, CRUD, Realtime, Storage).
+
+FLUJO DE DATOS:
+UI Widget → Riverpod Provider → Use Case → Repository Interface
+→ Repository Impl → Remote DataSource → SupabaseService → Supabase
+
+TIEMPO REAL (Chat):
+Supabase Realtime (WebSocket) → StreamController → Stream<Message>
+→ StreamProvider → ref.listen() → UI rebuild
+
+NAVEGACIÓN:
+SplashPage (/) → Auth (login/register) → ProfileSetup → Main App
+MainShell: HomePage / SearchPage / FriendsPage / MyProfilePage
+ChatPage → ChatDetailPage (conversación individual)
+
+================================================================
+10. DISEÑO DE BASE DE DATOS
+================================================================
+
+Motor: PostgreSQL (Supabase)
+Extensiones: uuid-ossp, pgcrypto
+
+TABLAS PRINCIPALES (13):
+
+1. users
+   Vinculada a auth.users de Supabase.
+   Campos: id (UUID PK), auth_id (FK auth.users), email, nickname
+   (único, max 20 chars), age (13-120), country, autonomous_region,
+   province, avatar_url, bio (10-500 chars), discord_username,
+   is_online, last_seen_at, availability (JSONB), gaming_style,
+   is_verified, is_reported, created_at, updated_at, deleted_at.
+
+2. games
+   Catálogo de juegos soportados.
+   Campos: id, title (único), description, icon_url,
+   has_competitive_mode, api_type (riot/valorant), timestamps.
+   Datos iniciales: League of Legends, Valorant.
+
+3. game_roles
+   Roles por juego.
+   LoL: Top, Jungle, Mid, ADC, Support.
+   Valorant: Duelist, Sentinel, Controller, Initiator.
+
+4. game_ranks
+   Rangos por juego con orden numérico.
+   LoL: Iron(1) → Challenger(9).
+   Valorant: Iron(1) → Radiant(8).
+
+5. user_games
+   Relación usuario-juego con detalles (rango, rol, horas, notas).
+   UNIQUE(user_id, game_id). Soporta juego principal y secundario.
+
+6. swipes
+   Acciones de matching: like, dislike, superlike.
+   Almacena compatibility_score. UNIQUE(user_id, target_user_id).
+   CHECK user_id != target_user_id.
+
+7. matches
+   Matches confirmados (ambos se dieron like).
+   CHECK user_id_1 < user_id_2 para evitar duplicados.
+   UNIQUE(user_id_1, user_id_2). Campo is_active y ends_at.
+
+8. friendships
+   Sistema de amistad. Estados: pending, accepted, rejected.
+   Guarda requested_by para saber quién inició la solicitud.
+
+9. blocks
+   Bloqueos entre usuarios. Previene visibilidad mutua en todo el
+   sistema mediante políticas RLS.
+
+10. groups
+    Squads/grupos de juego. max_members, is_public, game_id.
+
+11. group_members
+    Miembros de grupo con roles: admin, moderator, member.
+
+12. conversations + conversation_participants
+    Conversaciones 1-a-1 o grupales. Participantes vinculados con
+    last_read_at para control de mensajes no leídos.
+
+13. messages
+    Mensajes de texto. is_edited, is_deleted (soft delete),
+    edited_at, timestamps.
+
+14. notifications
+    Tipos: match, message, friend_request, friend_accepted,
+    group_invite. is_read + read_at.
+
+15. reports
+    Denuncias: pending → under_review → resolved/dismissed.
+
+16. api_logs
+    Auditoría de peticiones.
+
+ÍNDICES DE RENDIMIENTO:
+- idx_users_email, idx_users_nickname, idx_users_is_online
+- idx_swipes_user_id, idx_swipes_target_user_id
+- idx_matches_user_id_1/2, idx_matches_is_active
+- idx_messages_conversation_id, idx_messages_created_at
+- idx_notifications_user_id, idx_notifications_is_read
+
+TRIGGERS AUTOMÁTICOS:
+- trigger_users_updated_at
+- trigger_user_games_updated_at
+- trigger_swipes_updated_at
+- trigger_messages_updated_at
+
+FUNCIONES SQL:
+- calculate_match_compatibility(user1, user2): Calcula score 0-100
+  basado en juegos comunes (+20 por juego), mismo país (+20),
+  usuario online (+10). Cap en 100.
+- get_match_candidates(user, country, game, limit): Retorna
+  candidatos filtrados por país/juego, excluyendo ya evaluados y
+  bloqueados, ordenados por compatibility_score DESC.
+
+VISTAS:
+- vw_online_users: Usuarios con is_online=TRUE
+- vw_active_matches: Matches activos con datos de ambos usuarios
+- vw_user_friends: Amigos aceptados del usuario actual
+
+ROW LEVEL SECURITY (RLS):
+Habilitado en las 12 tablas principales. Políticas clave:
+- Users: ver propio perfil + perfiles no bloqueados
+- Users: solo editar propio perfil
+- Messages: solo ver/enviar en conversaciones donde eres participante
+- Notifications: solo ver las propias

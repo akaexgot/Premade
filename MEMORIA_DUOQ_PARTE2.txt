@@ -1,0 +1,517 @@
+================================================================
+MEMORIA DEL PROYECTO - TFG DAM 2025/2026
+PROYECTO: DuoQ (Premade) — PARTE 2
+================================================================
+
+================================================================
+11. DISEÑO DE INTERFAZ
+================================================================
+
+SISTEMA DE DISEÑO:
+Framework: Material Design 3 (useMaterial3: true)
+Tipografía: Google Fonts — Inter (pesos 400, 500, 600, 700)
+Forma de botones: StadiumBorder (píldoras redondeadas)
+Bordes de inputs: BorderRadius 14px
+Tarjetas: BorderRadius 20px
+
+PALETA DE COLORES:
+- Primary (coral/pink gaming): #FE3C72
+- Primary Dark: #E5365F
+- Primary Soft: #FFF0F3
+- Accent (electric blue): #3B82F6
+- Accent Dark: #2563EB
+- Neon Green (online/success): #10B981
+- Neon Purple (badges): #8B5CF6
+- Neon Orange (warnings): #F59E0B
+- Background: #F8F9FA
+- Surface/White: #FFFFFF
+- Text Primary: #1A1A2E
+- Text Secondary: #6B7280
+- Swipe Like: #10B981 (verde)
+- Swipe Nope: #EF4444 (rojo)
+- Swipe SuperLike: #3B82F6 (azul)
+- Nav Active: #FE3C72
+- Nav Inactive: #BDBDBD
+
+GRADIENTES:
+- primaryGradient: #FE3C72 → #FF655B (top-left → bottom-right)
+- cardGradient: transparente → #000 (sobre cards de swipe)
+- accentGradient: #3B82F6 → #8B5CF6
+
+BARRA DE NAVEGACIÓN INFERIOR (iOS-style):
+4 secciones con blur/glassmorphism (BackdropFilter sigmaX/Y=20):
+- 🔥 Descubrir (HomePage — swipe cards)
+- 🔍 Buscar (SearchPage — filtros)
+- 👥 Social (FriendsPage — amigos)
+- 👤 Perfil (MyProfilePage)
+
+PANTALLAS IMPLEMENTADAS:
+
+1. SplashPage: Logo centrado, detección de sesión activa
+2. LoginPage: Email + password, botón Google OAuth, link registro
+3. RegisterPage: Email, password, confirmación con validación
+4. ProfileSetupPage: Nickname, edad, país, región, bio, Discord
+5. GameSelectionPage: Grid de juegos disponibles con selección de
+   rango y rol por juego
+6. HomePage: Stack de cards con swipe left/right/up, indicadores
+   de like/nope/superlike, botones de acción en la parte inferior
+7. SearchPage: Barra de búsqueda + chips de filtro (todos/online/
+   por juego), lista de jugadores con info de rango y rol
+8. FriendsPage: Tabs "Amigos" y "Solicitudes", lista de amigos con
+   estado online, aceptar/rechazar solicitudes
+9. ChatPage: Lista de conversaciones con último mensaje y timestamp
+10. ChatDetailPage: Burbujas de mensajes con fecha, input + send
+11. MyProfilePage: Avatar, stats, juegos, botones editar y ajustes
+12. EditProfilePage: Formulario de edición de todos los campos
+13. MyGamesPage: Gestión de juegos del perfil
+14. PublicProfilePage: Vista del perfil de otro usuario, botón
+    añadir amigo / enviar mensaje / bloquear
+15. SettingsPage: Opciones de cuenta, cerrar sesión
+
+================================================================
+12. FUNCIONALIDADES
+================================================================
+
+AUTENTICACIÓN:
+- Registro con email y contraseña
+- Login con email y contraseña
+- Login con Google (OAuth2)
+- Logout con limpieza de sesión y caché
+- Reset de contraseña por email
+- Persistencia de sesión (auto-login)
+- Splash screen con redirección según estado de auth
+
+GESTIÓN DE PERFIL:
+- Creación de perfil post-registro (nickname único, edad, país)
+- Campos opcionales: región, provincia, bio, Discord
+- Validación: edad mínima 13 años, bio 10-500 caracteres
+- Subida de avatar a Supabase Storage
+- Edición de todos los campos del perfil
+- Indicador de estado online (is_online / last_seen_at)
+
+JUEGOS Y RANGOS:
+- Selección de múltiples juegos (LoL, Valorant y más)
+- Asignación de rango principal y secundario por juego
+- Asignación de rol principal y secundario por juego
+- Toggle casual vs competitivo
+- Registro de horas jugadas y notas de habilidad
+- Juego marcado como principal (is_primary)
+
+SISTEMA DE MATCHING:
+- Visualización de candidatos en formato stack de cards
+- Swipe right = like, swipe left = dislike, swipe up = superlike
+- Algoritmo de compatibilidad: juegos comunes + país + online
+- Detección automática de match mutuo al insertar swipe
+- Creación automática de conversación al hacer match
+- Filtros en HomeScreen: país, juego
+- Exclusión de usuarios ya evaluados y bloqueados
+
+CHAT EN TIEMPO REAL:
+- Lista de conversaciones con último mensaje
+- Vista de conversación con burbujas de mensajes
+- Envío de mensajes de texto
+- Recepción en tiempo real vía Supabase Realtime (WebSocket)
+- Stream de mensajes por conversationId
+- Marca de mensajes como leídos (last_read_at)
+- Creación automática de conversación 1-a-1
+
+SISTEMA SOCIAL:
+- Envío de solicitudes de amistad desde perfil público
+- Lista de solicitudes pendientes recibidas
+- Aceptar o rechazar solicitudes
+- Lista de amigos con indicador online
+- Bloqueo/desbloqueo de usuarios
+- Usuarios bloqueados no aparecen en matching ni búsqueda
+
+BÚSQUEDA:
+- Búsqueda por nickname (ilike, case-insensitive)
+- Filtro por juego (chip selector)
+- Filtro "Solo online"
+- Resultado con avatar, nickname, rango, rol y juegos
+
+NOTIFICACIONES:
+- Tipos: match, message, friend_request, friend_accepted, group_invite
+- Marcado como leída individual
+- Listado de no leídas
+
+================================================================
+13. DESARROLLO POR FASES
+================================================================
+
+El proyecto se dividió en 6 fases principales (pasos), cada una
+construida sobre la anterior:
+
+FASE 1 — ESTRUCTURA BASE
+- Creación de la estructura de carpetas Clean Architecture
+- Configuración del tema (AppTheme, AppColors, AppTextStyles)
+- Implementación de validadores de formularios
+- Definición de clases de error (Failure)
+- Configuración del archivo pubspec.yaml con todas las dependencias
+
+FASE 2 — BASE DE DATOS Y SUPABASE
+- Diseño completo del esquema SQL (schema.sql, 703 líneas)
+- Creación de 16 tablas con relaciones, índices y constraints
+- Implementación de Row Level Security (RLS) en 12 tablas
+- Funciones SQL: calculate_match_compatibility, get_match_candidates
+- Triggers automáticos de updated_at
+- Datos iniciales: juegos, roles y rangos de LoL y Valorant
+- Implementación de SupabaseService (singleton, 816 líneas)
+- Configuración de variables de entorno (.env)
+
+FASE 3 — AUTENTICACIÓN
+- LoginPage y RegisterPage con validación de formularios
+- SplashPage con detección de sesión activa
+- Google OAuth (signInWithOAuth)
+- AuthRepository, AuthRemoteDataSource
+- Entidades Freezed: AuthEntity
+- Use Cases: LoginUseCase, RegisterUseCase, LogoutUseCase
+- Riverpod providers de auth
+- Configuración de Go Router con guardas de autenticación
+
+FASE 4 — PERFILES
+- ProfileSetupPage (nickname, edad, país, bio, Discord)
+- GameSelectionPage con selección de juego, rango y rol
+- Subida de avatar con image_picker → Supabase Storage
+- EditProfilePage y MyProfilePage
+- ProfileRepository, ProfileRemoteDataSource
+- Entidades Freezed: UserProfileEntity, GameEntity
+- Use Cases: GetProfileUseCase, UpdateProfileUseCase, etc.
+
+FASE 5 — MATCHING
+- HomePage con stack de swipe cards (MatchCardWidget)
+- Algoritmo de swipe: like/dislike/superlike con animaciones
+- Detección de match mutuo en SupabaseService.swipeUser()
+- getMatchCandidates con RPC SQL + fallback manual
+- MatchingRepository, MatchingRemoteDataSource
+- Entidades Freezed: MatchingEntity, MatchEntity
+- Filtros por país y juego en swipe
+- PublicProfilePage para ver perfil de candidatos
+
+FASE 6 — CHAT Y SOCIAL
+- ChatPage (lista de conversaciones)
+- ChatDetailPage (mensajes + input)
+- Supabase Realtime: subscribeToMessages() con StreamController
+- Sistema social: amigos, solicitudes, bloqueos
+- FriendsPage con tabs Amigos / Solicitudes
+- ChatRepository, ChatRemoteDataSource
+- Entidades Freezed: Conversation, Message, ConversationPreview
+- 7 Use Cases de chat
+- 15+ Riverpod providers de chat
+- SearchPage con filtros
+
+================================================================
+14. PLANIFICACIÓN TEMPORAL
+================================================================
+
+[NOTA: Rellena las fechas reales de cada fase]
+
+Fase 1 — Estructura Base:       Desde: ___/___/___  Hasta: ___/___/___
+Fase 2 — Base de Datos:         Desde: ___/___/___  Hasta: ___/___/___
+Fase 3 — Autenticación:         Desde: ___/___/___  Hasta: ___/___/___
+Fase 4 — Perfiles:              Desde: ___/___/___  Hasta: ___/___/___
+Fase 5 — Matching:              Desde: ___/___/___  Hasta: ___/___/___
+Fase 6 — Chat y Social:         Desde: ___/___/___  Hasta: ___/___/___
+Documentación y memoria:        Desde: ___/___/___  Hasta: ___/___/___
+
+Estimación de horas por fase (según documentación del proyecto):
+- Fase 1: ~4 horas
+- Fase 2: ~6 horas
+- Fase 3: ~8 horas
+- Fase 4: ~8 horas
+- Fase 5: ~10 horas
+- Fase 6: ~10 horas
+- Documentación: ~8 horas
+TOTAL ESTIMADO: ~54 horas de desarrollo
+
+================================================================
+15. MANUAL DE INSTALACIÓN
+================================================================
+
+REQUISITOS PREVIOS:
+- Flutter SDK >= 3.13.0 instalado y en el PATH
+- Dart SDK >= 3.0.0 (incluido con Flutter)
+- Android Studio o VS Code con extensión Flutter/Dart
+- Python >= 3.0 (opcional, para scripts de generación)
+- Git
+
+PASO 1: Clonar el repositorio
+  git clone <url-del-repositorio>
+  cd premade
+
+PASO 2: Configurar Supabase
+  2.1. Ir a https://app.supabase.com → New Project
+  2.2. Nombre: premade-production, Region: Europe (Frankfurt)
+  2.3. En Settings → API, copiar:
+       - Project URL
+       - anon public key
+  2.4. En SQL Editor → New Query, pegar y ejecutar:
+       database/schema.sql (703 líneas)
+  2.5. Verificar ejecución sin errores
+
+PASO 3: Configurar variables de entorno
+  Crear archivo .env en la raíz del proyecto:
+  ------------------------------------------------
+  SUPABASE_URL=https://xxxxx.supabase.co
+  SUPABASE_ANON_KEY=eyJhbGciOiJI...
+  ------------------------------------------------
+
+PASO 4: Instalar dependencias Flutter
+  flutter pub get
+
+PASO 5: Generar código (Freezed + Riverpod)
+  dart run build_runner build --delete-conflicting-outputs
+
+PASO 6: Ejecutar la aplicación
+  flutter run
+  (Con emulador Android activo o dispositivo conectado)
+
+VERIFICACIÓN:
+  Ejecutar en SQL Editor de Supabase:
+  SELECT tablename FROM pg_tables WHERE schemaname = 'public';
+  → Debe devolver las 16 tablas
+  SELECT * FROM public.games;
+  → Debe mostrar League of Legends y Valorant
+
+SOLUCIÓN DE PROBLEMAS:
+- "relation already exists": DROP SCHEMA IF EXISTS public CASCADE; 
+  CREATE SCHEMA public; (y volver a ejecutar schema.sql)
+- "permission denied": Verificar RLS y políticas en Supabase Dashboard
+- Error de build_runner: Eliminar carpeta .dart_tool y repetir
+
+================================================================
+17. SEGURIDAD
+================================================================
+
+AUTENTICACIÓN:
+- Delegada completamente a Supabase Auth (sistema probado en producción)
+- Tokens JWT con expiración automática
+- autoRefreshToken configurado para gestión segura de sesiones
+- Contraseñas nunca almacenadas en la app ni en texto plano
+- Variables sensibles en .env (no versionado en Git)
+- service_role_key NUNCA expuesto en el cliente Flutter
+
+ROW LEVEL SECURITY (RLS):
+Habilitado en las 12 tablas principales. Garantiza que:
+- Un usuario solo puede ver su propio perfil O perfiles públicos
+  no bloqueados (no puede acceder a datos ajenos con SQL directo)
+- Solo puede editar su propio perfil (UPDATE policy)
+- Solo puede ver mensajes de conversaciones donde participa
+- Solo puede ver sus propias notificaciones
+- No puede ver usuarios que le han bloqueado (ni viceversa)
+
+CONSTRAINTS DE BASE DE DATOS:
+- age >= 13 (menores de edad no pueden registrarse)
+- bio entre 10 y 500 caracteres (evita spam)
+- CHECK user_id != target_user_id (no auto-swipe)
+- CHECK user_id_1 < user_id_2 (evita duplicados en matches)
+- Nicknames y emails únicos (UNIQUE constraints)
+- FK con ON DELETE CASCADE para integridad referencial
+
+SISTEMA DE BLOQUEOS:
+- Usuarios bloqueados se excluyen en matching, búsqueda y chat
+- Las políticas RLS verifican la tabla blocks en tiempo real
+- El bloqueador y el bloqueado no se ven mutuamente
+
+SISTEMA DE REPORTES:
+- Tabla reports con estados: pending → under_review → resolved
+- Usuarios reportados marcados con is_reported=TRUE
+- Flujo de moderación previsto
+
+SOFT DELETE:
+- Usuarios eliminados tienen deleted_at != NULL
+- Función cleanup_deleted_users() para hard delete diferido (30 días)
+- Los candidatos de matching excluyen usuarios con deleted_at
+
+GIT / CÓDIGO:
+- .env en .gitignore (credenciales no versionadas)
+- .env.example disponible con variables placeholder
+
+================================================================
+19. INCIDENCIAS Y MEJORAS
+================================================================
+
+INCIDENCIAS CONOCIDAS Y RESUELTAS:
+
+1. Doble ID de usuario (auth_id vs profile_id):
+   Supabase Auth genera un UUID para auth (auth_id) diferente al
+   UUID de la tabla public.users (profile_id). Se implementó
+   getProfileId() con caché en SupabaseService para resolver el
+   mapeo de forma eficiente.
+
+2. Fallback en get_match_candidates:
+   La función RPC SQL get_match_candidates a veces falla por
+   permisos. Se implementó un fallback manual en Dart que
+   reproduce la misma lógica con queries encadenadas.
+
+3. Estado de amistad en perfil público:
+   Se añadió getFriendshipStatus() que normaliza el orden de
+   user_id_1/user_id_2 (siempre el menor primero) para evitar
+   duplicados y garantizar unicidad de la relación.
+
+4. Deduplicación de matches:
+   CHECK constraint user_id_1 < user_id_2 garantiza que no
+   pueden existir dos filas para el mismo par de usuarios.
+   createMatch() ordena los IDs antes de insertar.
+
+MEJORAS PENDIENTES:
+
+1. PASO 7: Sistema de búsqueda avanzada
+   - SearchPage con autocomplete
+   - Historial de búsquedas (Hive local)
+   - Filtros por rango, disponibilidad horaria
+
+2. PASO 8: Chat avanzado
+   - Indicadores de escritura (typing indicators)
+   - Confirmaciones de lectura (read receipts)
+   - Reacciones a mensajes (emojis)
+   - Chat grupal funcional
+
+3. PASO 9: Notificaciones push
+   - Integración con Firebase Cloud Messaging (FCM)
+   - Badge count en ícono de app
+   - Alertas sonoras y vibración
+
+4. PASO 10: Media en chat
+   - Compartir imágenes
+   - Subida de archivos
+   - Notas de voz
+
+================================================================
+20. RESULTADOS OBTENIDOS
+================================================================
+
+MÉTRICAS DEL PROYECTO:
+
+Archivos de código Dart:        40+
+Líneas de código Dart:          5.000+
+Líneas de documentación:        2.500+
+Archivos SQL:                   3 (schema.sql, queries.sql, setup)
+Líneas de SQL:                  703 (schema) + 11.227 (queries)
+
+Arquitectura:
+  Capas implementadas:          5 (Presentation, Application,
+                                   Domain, Data, Services)
+  Riverpod providers:           30+
+  Entidades Freezed:            15+
+  Use Cases implementados:      25+
+  Páginas de UI:                15
+  Rutas del router:             10+
+
+Base de datos:
+  Tablas:                       16
+  Índices de rendimiento:       15+
+  Triggers automáticos:         4
+  Funciones SQL:                2
+  Vistas SQL:                   3
+  Políticas RLS:                8+
+
+Funcionalidades completadas (6/10 fases):
+  ✅ Autenticación completa (email + Google)
+  ✅ Perfiles de jugador con juegos, rangos y roles
+  ✅ Sistema de matching con swipe (like/dislike/superlike)
+  ✅ Algoritmo de compatibilidad
+  ✅ Chat en tiempo real (WebSocket)
+  ✅ Sistema social (amigos, solicitudes, bloqueos)
+  ✅ Búsqueda de jugadores con filtros
+  ✅ Notificaciones (estructura completa)
+  ⏳ Push notifications (Firebase FCM)
+  ⏳ Chat multimedia
+  ⏳ Sistema premium
+
+[NOTA: Añade aquí si probaste con usuarios reales, feedback
+recibido, y si subiste la app a Play Store o solo desarrollo local]
+
+================================================================
+21. FUTURAS MEJORAS
+================================================================
+
+A CORTO PLAZO (próximas fases planificadas):
+
+1. Search & Filter avanzado (PASO 7, ~2-3h)
+   Autocompletado de búsqueda, historial, filtros por rango y
+   disponibilidad horaria semanal.
+
+2. Chat avanzado (PASO 8, ~3-4h)
+   Typing indicators via Supabase Realtime presence, read receipts
+   bidireccionales, reacciones con emojis, edición/borrado de mensajes.
+
+3. Push Notifications (PASO 9, ~3h)
+   Integración con Firebase Cloud Messaging. Notificaciones de
+   nuevos matches, mensajes y solicitudes de amistad cuando la app
+   está en segundo plano.
+
+4. Media en chat (PASO 10, ~4h)
+   Compartir imágenes (Supabase Storage), grabación de notas de voz,
+   vista previa de enlaces.
+
+A MEDIO PLAZO:
+
+5. Integración con Riot Games API
+   Verificación automática de cuenta de LoL/Valorant, importación de
+   estadísticas reales (rank actual, win rate, champions/agents).
+
+6. Sistema de grupos/squads
+   Grupos de hasta 5 jugadores con chat grupal, coordinación de
+   partidas y sistema de invitaciones.
+
+7. Llamadas de voz/video
+   Integración con WebRTC o servicio externo (Agora, Daily.co) para
+   comunicación de voz durante las partidas.
+
+8. Sistema Premium
+   Suscripción con funcionalidades extra: superlikes ilimitados,
+   ver quién te dio like, filtros avanzados exclusivos, perfil destacado.
+
+A LARGO PLAZO:
+
+9. Publicación en Google Play Store y App Store (iOS)
+   Proceso de revisión, políticas de privacidad, screenshots y listing.
+
+10. Panel de administración web
+    Dashboard para moderación de reportes, gestión de usuarios y
+    estadísticas de uso de la plataforma.
+
+11. Internacionalización (i18n)
+    Soporte multiidioma usando el paquete intl ya instalado.
+    Idiomas: español, inglés, portugués.
+
+12. Modo oscuro (Dark Theme)
+    AppTheme.darkTheme con la misma paleta adaptada para modo noche.
+
+================================================================
+FIN DE LA MEMORIA (PARTE 2)
+================================================================
+
+PENDIENTE DE COMPLETAR POR EL ALUMNO:
+
+1. PORTADA: Nombre, apellidos, DNI, centro, ciclo, tutor, fecha
+
+2. ÍNDICE: Generar con las páginas reales del documento final
+
+6. MOTIVACIÓN: Razones personales para elegir este proyecto
+
+7. ESTUDIO DE MERCADO: Comparativa con OP.GG Duo, LFG.gg, Discord,
+   TeamFinder — se puede hacer una tabla comparativa
+
+11. DISEÑO DE INTERFAZ: Añadir capturas de pantalla reales de la app
+
+14. PLANIFICACIÓN TEMPORAL: Fechas reales + diagrama de Gantt
+
+16. MANUAL DE USUARIO: Capturas paso a paso del flujo de usuario
+
+18. PRUEBAS: Resultados de pruebas manuales o automatizadas
+
+20. RESULTADOS: Feedback de usuarios reales si los hay
+
+22. CONCLUSIONES: Reflexión personal sobre el aprendizaje
+
+23. BIBLIOGRAFÍA:
+    - https://flutter.dev/docs
+    - https://supabase.com/docs
+    - https://riverpod.dev
+    - https://pub.dev (paquetes utilizados)
+    - Documentación de Go Router, Freezed, etc.
+
+24. ANEXOS: Código fuente, diagramas adicionales, mockups
+
+================================================================
