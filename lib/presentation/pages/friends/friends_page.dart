@@ -1,13 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:premade/application/providers/matching_providers.dart';
 import 'package:premade/core/theme/app_colors.dart';
 import 'package:premade/core/network/supabase_service.dart';
 import 'package:premade/core/widgets/safe_network_avatar.dart';
 
 class FriendsPage extends ConsumerStatefulWidget {
-  const FriendsPage({Key? key}) : super(key: key);
+  final bool showHeader;
+  final bool showTabs;
+  final int initialTab;
+
+  const FriendsPage({
+    super.key,
+    this.showHeader = true,
+    this.showTabs = true,
+    this.initialTab = 0,
+  });
 
   @override
   ConsumerState<FriendsPage> createState() => _FriendsPageState();
@@ -24,7 +32,11 @@ class _FriendsPageState extends ConsumerState<FriendsPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: widget.initialTab,
+    );
     Future.microtask(() {
       _loadFriends();
       _loadPendingRequests();
@@ -121,41 +133,52 @@ class _FriendsPageState extends ConsumerState<FriendsPage>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              child: Text('Social',
-                  style: TextStyle(
-                      fontSize: 34,
-                      fontWeight: FontWeight.w800,
-                      color: textPrimary,
-                      letterSpacing: -0.5)),
-            ),
-            const SizedBox(height: 10),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: TabBar(
-                controller: _tabController,
-                labelColor: AppColors.primary,
-                unselectedLabelColor: theme.textTheme.bodySmall?.color,
-                indicatorColor: AppColors.primary,
-                indicatorSize: TabBarIndicatorSize.label,
-                labelStyle:
-                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                tabs: [
-                  Tab(text: 'Amigos (${_friends.length})'),
-                  Tab(text: 'Solicitudes (${_pendingRequests.length})'),
-                ],
+            if (widget.showHeader) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                child: Text('Social',
+                    style: TextStyle(
+                        fontSize: 34,
+                        fontWeight: FontWeight.w800,
+                        color: textPrimary,
+                        letterSpacing: -0.5)),
               ),
-            ),
-            const SizedBox(height: 10),
+              const SizedBox(height: 10),
+            ],
+            if (widget.showTabs) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: TabBar(
+                  controller: _tabController,
+                  labelColor: AppColors.primary,
+                  unselectedLabelColor: theme.textTheme.bodySmall?.color,
+                  indicatorColor: AppColors.primary,
+                  indicatorSize: TabBarIndicatorSize.label,
+                  labelStyle: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 16),
+                  tabs: [
+                    Tab(text: 'Amigos (${_friends.length})'),
+                    Tab(text: 'Solicitudes (${_pendingRequests.length})'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
             Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildFriendsList(theme, isDark, cardColor, textPrimary),
-                  _buildRequestsList(theme, isDark, cardColor, textPrimary),
-                ],
-              ),
+              child: widget.showTabs
+                  ? TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildFriendsList(
+                            theme, isDark, cardColor, textPrimary),
+                        _buildRequestsList(
+                            theme, isDark, cardColor, textPrimary),
+                      ],
+                    )
+                  : widget.initialTab == 0
+                      ? _buildFriendsList(theme, isDark, cardColor, textPrimary)
+                      : _buildRequestsList(
+                          theme, isDark, cardColor, textPrimary),
             ),
           ],
         ),
@@ -207,7 +230,10 @@ class _FriendsPageState extends ConsumerState<FriendsPage>
       itemBuilder: (context, index) {
         final friend = _friends[index];
         return InkWell(
-          onTap: () => _navigateToChat(friend['id'].toString()),
+          onTap: () => context.push(
+            '/public-profile/${friend['id']}',
+            extra: friend,
+          ),
           borderRadius: BorderRadius.circular(16),
           child: Container(
             margin: const EdgeInsets.symmetric(vertical: 4),
@@ -242,14 +268,10 @@ class _FriendsPageState extends ConsumerState<FriendsPage>
                     ],
                   ),
                 ),
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                      color: AppColors.primarySoft,
-                      borderRadius: BorderRadius.circular(12)),
-                  child: const Icon(Icons.chat_bubble_outline_rounded,
-                      color: AppColors.primary, size: 20),
+                IconButton.filledTonal(
+                  tooltip: 'Abrir chat',
+                  onPressed: () => _navigateToChat(friend['id'].toString()),
+                  icon: const Icon(Icons.chat_bubble_outline_rounded),
                 ),
               ],
             ),
@@ -291,59 +313,66 @@ class _FriendsPageState extends ConsumerState<FriendsPage>
         final req = _pendingRequests[index];
         final requester = req['requester'] ?? {};
 
-        return Container(
-          margin: const EdgeInsets.symmetric(vertical: 6),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-                color: isDark ? const Color(0xFF2A2A45) : AppColors.grey200),
+        return InkWell(
+          onTap: () => context.push(
+            '/public-profile/${requester['id']}',
+            extra: requester,
           ),
-          child: Row(
-            children: [
-              SafeNetworkAvatar(
-                radius: 25,
-                imageUrl: requester['avatar_url']?.toString(),
-                backgroundColor:
-                    isDark ? const Color(0xFF2A2A45) : AppColors.grey200,
-                iconColor:
-                    theme.textTheme.bodySmall?.color ?? AppColors.textTertiary,
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      requester['nickname'] ?? 'Usuario',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: textPrimary),
-                    ),
-                    Text(
-                      'Quiere ser tu amigo',
-                      style: TextStyle(
-                          color: theme.textTheme.bodySmall?.color,
-                          fontSize: 12),
-                    ),
-                  ],
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 6),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                  color: isDark ? const Color(0xFF2A2A45) : AppColors.grey200),
+            ),
+            child: Row(
+              children: [
+                SafeNetworkAvatar(
+                  radius: 25,
+                  imageUrl: requester['avatar_url']?.toString(),
+                  backgroundColor:
+                      isDark ? const Color(0xFF2A2A45) : AppColors.grey200,
+                  iconColor: theme.textTheme.bodySmall?.color ??
+                      AppColors.textTertiary,
                 ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.check_circle,
-                    color: AppColors.success, size: 32),
-                onPressed: () =>
-                    _respondToRequest(requester['id'].toString(), true),
-              ),
-              IconButton(
-                icon:
-                    const Icon(Icons.cancel, color: AppColors.error, size: 32),
-                onPressed: () =>
-                    _respondToRequest(requester['id'].toString(), false),
-              ),
-            ],
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        requester['nickname'] ?? 'Usuario',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: textPrimary),
+                      ),
+                      Text(
+                        'Quiere ser tu amigo',
+                        style: TextStyle(
+                            color: theme.textTheme.bodySmall?.color,
+                            fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.check_circle,
+                      color: AppColors.success, size: 32),
+                  onPressed: () =>
+                      _respondToRequest(requester['id'].toString(), true),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.cancel,
+                      color: AppColors.error, size: 32),
+                  onPressed: () =>
+                      _respondToRequest(requester['id'].toString(), false),
+                ),
+              ],
+            ),
           ),
         );
       },

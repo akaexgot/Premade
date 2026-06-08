@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:premade/application/providers/auth_providers.dart';
-import 'package:premade/core/network/supabase_service.dart';
 import 'package:premade/core/theme/app_colors.dart';
 
 class SplashPage extends ConsumerStatefulWidget {
@@ -25,97 +24,82 @@ class _SplashPageState extends ConsumerState<SplashPage> {
     if (!mounted) return;
 
     try {
+      // Verificar si hay usuario autenticado
       final isAuthenticated =
           await ref.read(isUserAuthenticatedUseCaseProvider).call();
 
-      final isAuth = isAuthenticated.fold(
-        (failure) => false,
-        (authenticated) => authenticated,
+      isAuthenticated.fold(
+        (failure) {
+          // Error - ir a login
+          if (mounted) context.go('/login');
+        },
+        (isAuth) {
+          // Navegar según autenticación
+          if (mounted) {
+            if (isAuth) {
+              // Verificar si perfil está completo
+              context.go('/home');
+            } else {
+              context.go('/login');
+            }
+          }
+        },
       );
-
-      if (!mounted) return;
-      if (!isAuth) {
-        context.go('/login');
-        return;
-      }
-
-      final supabase = ref.read(supabaseServiceProvider);
-      final authId = supabase.currentUserId;
-      final profile =
-          authId == null ? null : await supabase.getUserProfile(authId);
-
-      if (!mounted) return;
-      if (profile == null) {
-        context.go('/profile-setup');
-        return;
-      }
-
-      final games = await supabase.getUserGames();
-      if (!mounted) return;
-      context.go(games.isEmpty ? '/game-selection' : '/home');
-    } catch (_) {
-      if (mounted) {
-        context.go('/login');
-      }
+    } catch (e) {
+      if (mounted) context.go('/login');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(gradient: AppColors.heroGradient),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 88,
-                height: 88,
-                decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: AppColors.primaryShadow,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Logo animado
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [
+                    AppColors.primary,
+                    AppColors.secondary,
+                  ],
                 ),
-                child: const Icon(
-                  Icons.sports_esports_rounded,
-                  color: Colors.white,
-                  size: 48,
-                ),
+                borderRadius: BorderRadius.circular(16),
               ),
-              const SizedBox(height: 24),
-              Text(
-                'PREMADE',
-                style: TextStyle(
-                  fontSize: 36,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0,
-                  color: theme.colorScheme.onSurface,
-                  height: 1,
-                ),
+              child: const Icon(
+                Icons.people,
+                color: Colors.white,
+                size: 48,
               ),
-              const SizedBox(height: 10),
-              Text(
-                'Encuentra equipo. Juega mejor.',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: theme.textTheme.bodySmall?.color,
-                ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'PREMADE',
+              style: TextStyle(
+                fontSize: 32,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 2,
               ),
-              const SizedBox(height: 42),
-              const SizedBox(
-                width: 32,
-                height: 32,
-                child: CircularProgressIndicator(
-                  strokeWidth: 3,
-                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-                ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Find your perfect gaming squad',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 40),
+            const CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(
+                AppColors.primary,
+              ),
+            ),
+          ],
         ),
       ),
     );

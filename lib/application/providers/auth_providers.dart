@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:premade/core/errors/failures.dart';
 import 'package:premade/core/network/supabase_service.dart';
 import 'package:premade/data/datasources/auth_remote_data_source.dart';
 import 'package:premade/data/repositories/auth_repository_impl.dart';
@@ -82,8 +81,7 @@ class AuthUserNotifier extends StateNotifier<AuthUser?> {
 
   Future<void> _checkCurrentUser() async {
     try {
-      final result =
-          await ref.read(getCurrentUserUseCaseProvider).call();
+      final result = await ref.read(getCurrentUserUseCaseProvider).call();
       result.fold(
         (failure) => state = null,
         (user) => state = user,
@@ -98,7 +96,7 @@ class AuthUserNotifier extends StateNotifier<AuthUser?> {
       final result = await ref.read(signUpUseCaseProvider).call(params);
       result.fold(
         (failure) {
-          throw Exception((failure as Failure).message);
+          throw Exception(failure.message);
         },
         (response) {
           state = response.user;
@@ -114,7 +112,7 @@ class AuthUserNotifier extends StateNotifier<AuthUser?> {
       final result = await ref.read(signInUseCaseProvider).call(params);
       result.fold(
         (failure) {
-          throw Exception((failure as Failure).message);
+          throw Exception(failure.message);
         },
         (response) {
           state = response.user;
@@ -130,7 +128,7 @@ class AuthUserNotifier extends StateNotifier<AuthUser?> {
       final result = await ref.read(signInWithGoogleUseCaseProvider).call();
       result.fold(
         (failure) {
-          throw Exception((failure as Failure).message);
+          throw Exception(failure.message);
         },
         (response) {
           state = response.user;
@@ -146,7 +144,7 @@ class AuthUserNotifier extends StateNotifier<AuthUser?> {
       final result = await ref.read(signOutUseCaseProvider).call();
       result.fold(
         (failure) {
-          throw Exception((failure as Failure).message);
+          throw Exception(failure.message);
         },
         (_) {
           state = null;
@@ -162,7 +160,7 @@ class AuthUserNotifier extends StateNotifier<AuthUser?> {
       final result = await ref.read(resetPasswordUseCaseProvider).call(params);
       result.fold(
         (failure) {
-          throw Exception((failure as Failure).message);
+          throw Exception(failure.message);
         },
         (_) {
           // Usuario recibe correo de reset

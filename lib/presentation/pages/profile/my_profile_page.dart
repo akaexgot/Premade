@@ -7,6 +7,7 @@ import 'package:premade/application/providers/matching_providers.dart';
 import 'package:premade/core/theme/app_colors.dart';
 import 'package:premade/core/network/supabase_service.dart';
 import 'package:premade/core/widgets/safe_network_avatar.dart';
+import 'package:premade/presentation/pages/admin/admin_panel_page.dart';
 
 class MyProfilePage extends ConsumerStatefulWidget {
   const MyProfilePage({Key? key}) : super(key: key);
@@ -19,6 +20,7 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
   int _friendsCount = 0;
   List<Map<String, dynamic>> _userGames = [];
   String? _requestedProfileUserId;
+  bool _isAdmin = false;
 
   @override
   void initState() {
@@ -27,6 +29,7 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
       _loadProfileIfNeeded();
       _loadFriendsCount();
       _loadUserGames();
+      _loadAdminStatus();
     });
   }
 
@@ -63,6 +66,14 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
     } catch (_) {}
   }
 
+  Future<void> _loadAdminStatus() async {
+    try {
+      final isAdmin =
+          await ref.read(supabaseServiceProvider).isCurrentUserAdmin();
+      if (mounted) setState(() => _isAdmin = isAdmin);
+    } catch (_) {}
+  }
+
   Future<void> _refreshProfile() async {
     final authUser = ref.read(authUserProvider);
     if (authUser != null) {
@@ -70,6 +81,7 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
     }
     await _loadFriendsCount();
     await _loadUserGames();
+    await _loadAdminStatus();
   }
 
   String _roleName(Map<String, dynamic>? role) {
@@ -431,6 +443,19 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
                           icon: Icons.settings_rounded,
                           label: 'Ajustes',
                           onTap: () => context.push('/settings')),
+                      if (_isAdmin) ...[
+                        Divider(
+                            height: 0, indent: 52, color: theme.dividerColor),
+                        _MenuItem(
+                          icon: Icons.admin_panel_settings_rounded,
+                          label: 'Panel admin',
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const AdminPanelPage(),
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

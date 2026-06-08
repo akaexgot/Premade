@@ -5,7 +5,7 @@ import 'package:premade/application/providers/profile_providers.dart';
 import 'package:premade/domain/entities/user_profile_entity.dart';
 
 class GameSelectionPage extends ConsumerStatefulWidget {
-  const GameSelectionPage({Key? key}) : super(key: key);
+  const GameSelectionPage({super.key});
 
   @override
   ConsumerState<GameSelectionPage> createState() => _GameSelectionPageState();
@@ -21,17 +21,20 @@ class _GameSelectionPageState extends ConsumerState<GameSelectionPage> {
   int _playedHours = 0;
 
   final TextEditingController _skillNotesController = TextEditingController();
+  final TextEditingController _playedHoursController = TextEditingController();
   final List<String> _selectedGames = [];
 
   @override
   void dispose() {
     _skillNotesController.dispose();
+    _playedHoursController.dispose();
     super.dispose();
   }
 
   Future<void> _addGame() async {
-    if (_selectedGameId == null) {
-      _showError('Selecciona un juego');
+    final validationError = _validateGameSelection();
+    if (validationError != null) {
+      _showError(validationError);
       return;
     }
 
@@ -63,6 +66,7 @@ class _GameSelectionPageState extends ConsumerState<GameSelectionPage> {
         _isCasualOnly = false;
         _playedHours = 0;
         _skillNotesController.clear();
+        _playedHoursController.clear();
       });
 
       if (mounted) {
@@ -90,6 +94,51 @@ class _GameSelectionPageState extends ConsumerState<GameSelectionPage> {
     ref.read(profileErrorProvider.notifier).setError(message);
   }
 
+  String? _validateGameSelection() {
+    if (_selectedGameId == null) {
+      return 'Selecciona un juego';
+    }
+
+    final hoursText = _playedHoursController.text.trim();
+    if (hoursText.isNotEmpty) {
+      final hours = int.tryParse(hoursText);
+      if (hours == null) {
+        return 'Las horas jugadas deben ser un número';
+      }
+      if (hours < 0 || hours > 100000) {
+        return 'Las horas jugadas deben estar entre 0 y 100000';
+      }
+      _playedHours = hours;
+    } else {
+      _playedHours = 0;
+    }
+
+    final skillNotes = _skillNotesController.text.trim();
+    if (skillNotes.length > 500) {
+      return 'Las notas no pueden superar 500 caracteres';
+    }
+
+    if (!_isCasualOnly && _selectedPrimaryRank == null) {
+      return 'Selecciona tu rango principal o marca que solo juegas casual';
+    }
+
+    if (!_isCasualOnly && _selectedMainRole == null) {
+      return 'Selecciona tu rol principal o marca que solo juegas casual';
+    }
+
+    if (_selectedSecondaryRank != null &&
+        _selectedSecondaryRank == _selectedPrimaryRank) {
+      return 'El rango secundario debe ser distinto al principal';
+    }
+
+    if (_selectedSecondaryRole != null &&
+        _selectedSecondaryRole == _selectedMainRole) {
+      return 'El rol secundario debe ser distinto al principal';
+    }
+
+    return null;
+  }
+
   void _showSuccess(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -98,75 +147,6 @@ class _GameSelectionPageState extends ConsumerState<GameSelectionPage> {
         duration: const Duration(seconds: 2),
       ),
     );
-  }
-
-  String _gameTitle(Map<String, dynamic> game) {
-    return game['title']?.toString() ?? 'Desconocido';
-  }
-
-  String? _gameId(Map<String, dynamic> game) {
-    final id = game['id']?.toString();
-    return id == null || id.isEmpty ? null : id;
-  }
-
-  String _roleName(Map<String, dynamic> role) {
-    return role['role_name']?.toString() ??
-        role['name']?.toString() ??
-        'Desconocido';
-  }
-
-  String _rankName(Map<String, dynamic> rank) {
-    return rank['rank_tier']?.toString() ??
-        rank['tier']?.toString() ??
-        rank['name']?.toString() ??
-        'Desconocido';
-  }
-
-  Future<void> _showGamePicker(List<Map<String, dynamic>> games) async {
-    final availableGames = games.where((game) {
-      final id = _gameId(game);
-      return id != null && !_selectedGames.contains(id);
-    }).toList()
-      ..sort((a, b) => _gameTitle(a).compareTo(_gameTitle(b)));
-
-    if (availableGames.isEmpty) {
-      _showError('Ya has agregado todos los juegos disponibles');
-      return;
-    }
-
-    final selectedId = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          child: ListView.separated(
-            shrinkWrap: true,
-            itemCount: availableGames.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final game = availableGames[index];
-              final id = _gameId(game);
-              return ListTile(
-                leading: const Icon(Icons.sports_esports),
-                title: Text(_gameTitle(game)),
-                onTap: id == null ? null : () => Navigator.pop(context, id),
-              );
-            },
-          ),
-        );
-      },
-    );
-
-    if (selectedId == null || !mounted) return;
-
-    setState(() {
-      _selectedGameId = selectedId;
-      _selectedPrimaryRank = null;
-      _selectedSecondaryRank = null;
-      _selectedMainRole = null;
-      _selectedSecondaryRole = null;
-    });
-    ref.read(profileErrorProvider.notifier).clearError();
   }
 
   @override
@@ -231,7 +211,7 @@ class _GameSelectionPageState extends ConsumerState<GameSelectionPage> {
                 ...gamesAsyncValue.when(
                   data: (games) => _selectedGames.map((gameId) {
                     final game = games.firstWhere(
-                      (g) => _gameId(g) == gameId,
+                      (g) => g['id'] == gameId,
                       orElse: () => {'title': 'Desconocido'},
                     );
                     return Padding(
@@ -274,102 +254,34 @@ class _GameSelectionPageState extends ConsumerState<GameSelectionPage> {
 
               // Seleccionar juego
               gamesAsyncValue.when(
-                data: (games) {
-                  final availableGames = games.where((g) {
-                    final id = _gameId(g);
-                    return id != null && !_selectedGames.contains(id);
-                  }).toList();
-                  if (games.isEmpty) {
-                    return Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
-                        border: Border.all(color: Colors.orange.shade300),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.warning_amber,
-                              color: Colors.orange.shade700),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'No hay juegos disponibles. Verifica la conexión con la base de datos.',
-                              style: TextStyle(color: Colors.orange.shade700),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-                  String? selectedGameTitle;
-                  if (_selectedGameId != null) {
-                    for (final game in games) {
-                      if (_gameId(game) == _selectedGameId) {
-                        selectedGameTitle = _gameTitle(game);
-                        break;
-                      }
-                    }
-                  }
-
-                  return InkWell(
-                    onTap: availableGames.isEmpty
-                        ? null
-                        : () => _showGamePicker(games),
-                    borderRadius: BorderRadius.circular(12),
-                    child: InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: 'Juego',
-                        prefixIcon: const Icon(Icons.sports_esports),
-                        suffixIcon: const Icon(Icons.expand_more),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        selectedGameTitle ??
-                            (availableGames.isEmpty
-                                ? 'No quedan juegos disponibles'
-                                : 'Selecciona un juego'),
-                        style: TextStyle(
-                          color: selectedGameTitle == null
-                              ? Theme.of(context).hintColor
-                              : null,
-                        ),
-                      ),
+                data: (games) => DropdownButtonFormField<String>(
+                  initialValue: _selectedGameId,
+                  decoration: InputDecoration(
+                    labelText: 'Juego',
+                    prefixIcon: const Icon(Icons.sports_esports),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  );
-                },
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, _) => Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade50,
-                    border: Border.all(color: Colors.red.shade300),
-                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.error, color: Colors.red.shade700),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'Error al cargar juegos: $error',
-                              style: TextStyle(color: Colors.red.shade700),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      ElevatedButton(
-                        onPressed: () => ref.invalidate(gamesListProvider),
-                        child: const Text('Reintentar'),
-                      ),
-                    ],
-                  ),
+                  items: games
+                      .where((g) => !_selectedGames.contains(g['id']))
+                      .map((game) => DropdownMenuItem<String>(
+                            value: game['id'] as String,
+                            child: Text(game['title'] ?? 'Desconocido'),
+                          ))
+                      .toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedGameId = value;
+                      _selectedPrimaryRank = null;
+                      _selectedSecondaryRank = null;
+                      _selectedMainRole = null;
+                      _selectedSecondaryRole = null;
+                    });
+                  },
                 ),
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (_, __) => const Text('Error al cargar juegos'),
               ),
               const SizedBox(height: 16),
 
@@ -377,7 +289,7 @@ class _GameSelectionPageState extends ConsumerState<GameSelectionPage> {
               if (_selectedGameId != null)
                 rolesAsyncValue.when(
                   data: (roles) => DropdownButtonFormField<String>(
-                    value: _selectedMainRole,
+                    initialValue: _selectedMainRole,
                     decoration: InputDecoration(
                       labelText: 'Rol Principal',
                       border: OutlineInputBorder(
@@ -385,11 +297,10 @@ class _GameSelectionPageState extends ConsumerState<GameSelectionPage> {
                       ),
                     ),
                     items: roles
-                        .map<DropdownMenuItem<String>>(
-                            (role) => DropdownMenuItem<String>(
-                                  value: role['id'].toString(),
-                                  child: Text(_roleName(role)),
-                                ))
+                        .map((role) => DropdownMenuItem<String>(
+                              value: role['id'] as String,
+                              child: Text(role['role_name'] ?? 'Desconocido'),
+                            ))
                         .toList(),
                     onChanged: (value) {
                       setState(() => _selectedMainRole = value);
@@ -403,8 +314,8 @@ class _GameSelectionPageState extends ConsumerState<GameSelectionPage> {
               // Rol secundario
               if (_selectedGameId != null)
                 rolesAsyncValue.when(
-                  data: (roles) => DropdownButtonFormField<String?>(
-                    value: _selectedSecondaryRole,
+                  data: (roles) => DropdownButtonFormField<String>(
+                    initialValue: _selectedSecondaryRole,
                     decoration: InputDecoration(
                       labelText: 'Rol Secundario (Opcional)',
                       border: OutlineInputBorder(
@@ -412,18 +323,16 @@ class _GameSelectionPageState extends ConsumerState<GameSelectionPage> {
                       ),
                     ),
                     items: [
-                      const DropdownMenuItem<String?>(
+                      const DropdownMenuItem<String>(
                         value: null,
                         child: Text('Ninguno'),
                       ),
                       ...roles
                           .where((r) => r['id'] != _selectedMainRole)
-                          .map<DropdownMenuItem<String?>>(
-                              (role) => DropdownMenuItem<String?>(
-                                    value: role['id']?.toString(),
-                                    child: Text(_roleName(role)),
-                                  ))
-                          .toList(),
+                          .map((role) => DropdownMenuItem<String>(
+                                value: role['id'] as String,
+                                child: Text(role['role_name'] ?? 'Desconocido'),
+                              )),
                     ],
                     onChanged: (value) {
                       setState(() => _selectedSecondaryRole = value);
@@ -438,7 +347,7 @@ class _GameSelectionPageState extends ConsumerState<GameSelectionPage> {
               if (_selectedGameId != null)
                 ranksAsyncValue.when(
                   data: (ranks) => DropdownButtonFormField<String>(
-                    value: _selectedPrimaryRank,
+                    initialValue: _selectedPrimaryRank,
                     decoration: InputDecoration(
                       labelText: 'Rango Principal',
                       border: OutlineInputBorder(
@@ -446,11 +355,10 @@ class _GameSelectionPageState extends ConsumerState<GameSelectionPage> {
                       ),
                     ),
                     items: ranks
-                        .map<DropdownMenuItem<String>>(
-                            (rank) => DropdownMenuItem<String>(
-                                  value: rank['id'].toString(),
-                                  child: Text(_rankName(rank)),
-                                ))
+                        .map((rank) => DropdownMenuItem<String>(
+                              value: rank['id'] as String,
+                              child: Text(rank['rank_tier'] ?? 'Desconocido'),
+                            ))
                         .toList(),
                     onChanged: (value) {
                       setState(() => _selectedPrimaryRank = value);
@@ -464,8 +372,8 @@ class _GameSelectionPageState extends ConsumerState<GameSelectionPage> {
               // Rango secundario
               if (_selectedGameId != null)
                 ranksAsyncValue.when(
-                  data: (ranks) => DropdownButtonFormField<String?>(
-                    value: _selectedSecondaryRank,
+                  data: (ranks) => DropdownButtonFormField<String>(
+                    initialValue: _selectedSecondaryRank,
                     decoration: InputDecoration(
                       labelText: 'Rango Secundario (Opcional)',
                       border: OutlineInputBorder(
@@ -473,18 +381,16 @@ class _GameSelectionPageState extends ConsumerState<GameSelectionPage> {
                       ),
                     ),
                     items: [
-                      const DropdownMenuItem<String?>(
+                      const DropdownMenuItem<String>(
                         value: null,
                         child: Text('Ninguno'),
                       ),
                       ...ranks
                           .where((r) => r['id'] != _selectedPrimaryRank)
-                          .map<DropdownMenuItem<String?>>(
-                              (rank) => DropdownMenuItem<String?>(
-                                    value: rank['id']?.toString(),
-                                    child: Text(_rankName(rank)),
-                                  ))
-                          .toList(),
+                          .map((rank) => DropdownMenuItem<String>(
+                                value: rank['id'] as String,
+                                child: Text(rank['rank_tier'] ?? 'Desconocido'),
+                              )),
                     ],
                     onChanged: (value) {
                       setState(() => _selectedSecondaryRank = value);
@@ -498,6 +404,7 @@ class _GameSelectionPageState extends ConsumerState<GameSelectionPage> {
               // Horas jugadas
               if (_selectedGameId != null)
                 TextField(
+                  controller: _playedHoursController,
                   enabled: !isLoading,
                   keyboardType: TextInputType.number,
                   onChanged: (value) {

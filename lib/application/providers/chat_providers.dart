@@ -1,7 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:premade/application/providers/auth_providers.dart';
 import 'package:premade/core/network/supabase_service.dart';
-import 'package:premade/core/errors/failures.dart';
 import 'package:premade/data/datasources/chat_remote_data_source.dart';
 import 'package:premade/data/repositories/chat_repository_impl.dart';
 import 'package:premade/domain/entities/chat_entity.dart';
@@ -23,7 +21,8 @@ final chatRepositoryProvider = Provider<ChatRepository>((ref) {
 });
 
 /// Use cases
-final getConversationsUseCaseProvider = Provider<GetConversationsUseCase>((ref) {
+final getConversationsUseCaseProvider =
+    Provider<GetConversationsUseCase>((ref) {
   final repository = ref.watch(chatRepositoryProvider);
   return GetConversationsUseCase(repository);
 });
@@ -38,12 +37,14 @@ final sendMessageUseCaseProvider = Provider<SendMessageUseCase>((ref) {
   return SendMessageUseCase(repository);
 });
 
-final getOrCreateConversationUseCaseProvider = Provider<GetOrCreateConversationUseCase>((ref) {
+final getOrCreateConversationUseCaseProvider =
+    Provider<GetOrCreateConversationUseCase>((ref) {
   final repository = ref.watch(chatRepositoryProvider);
   return GetOrCreateConversationUseCase(repository);
 });
 
-final markMessagesAsReadUseCaseProvider = Provider<MarkMessagesAsReadUseCase>((ref) {
+final markMessagesAsReadUseCaseProvider =
+    Provider<MarkMessagesAsReadUseCase>((ref) {
   final repository = ref.watch(chatRepositoryProvider);
   return MarkMessagesAsReadUseCase(repository);
 });
@@ -53,7 +54,8 @@ final getMessageUseCaseProvider = Provider<GetMessageUseCase>((ref) {
   return GetMessageUseCase(repository);
 });
 
-final getConversationDetailsUseCaseProvider = Provider<GetConversationDetailsUseCase>((ref) {
+final getConversationDetailsUseCaseProvider =
+    Provider<GetConversationDetailsUseCase>((ref) {
   final repository = ref.watch(chatRepositoryProvider);
   return GetConversationDetailsUseCase(repository);
 });
@@ -119,19 +121,24 @@ class MessagesNotifier extends StateNotifier<List<Message>> {
 // ============ STATE PROVIDERS ============
 
 /// Provider para conversaciones
-final conversationsProvider = StateNotifierProvider<ConversationsNotifier, List<ConversationPreview>>((ref) {
+final conversationsProvider =
+    StateNotifierProvider<ConversationsNotifier, List<ConversationPreview>>(
+        (ref) {
   final useCase = ref.watch(getConversationsUseCaseProvider);
   return ConversationsNotifier(useCase);
 });
 
 /// Provider para mensajes de conversación actual
-final messagesProvider = StateNotifierProvider.family<MessagesNotifier, List<Message>, String>((ref, conversationId) {
+final messagesProvider =
+    StateNotifierProvider.family<MessagesNotifier, List<Message>, String>(
+        (ref, conversationId) {
   final useCase = ref.watch(getMessagesUseCaseProvider);
   return MessagesNotifier(useCase);
 });
 
 /// Provider para conversaciones con FutureProvider
-final conversationsFutureProvider = FutureProvider<List<ConversationPreview>>((ref) async {
+final conversationsFutureProvider =
+    FutureProvider<List<ConversationPreview>>((ref) async {
   final useCase = ref.watch(getConversationsUseCaseProvider);
   final result = await useCase();
   return result.fold(
@@ -141,7 +148,8 @@ final conversationsFutureProvider = FutureProvider<List<ConversationPreview>>((r
 });
 
 /// Provider para mensajes con FutureProvider
-final messagesFutureProvider = FutureProvider.family<List<Message>, String>((ref, conversationId) async {
+final messagesFutureProvider =
+    FutureProvider.family<List<Message>, String>((ref, conversationId) async {
   final useCase = ref.watch(getMessagesUseCaseProvider);
   final result = await useCase(conversationId);
   return result.fold(
@@ -151,7 +159,8 @@ final messagesFutureProvider = FutureProvider.family<List<Message>, String>((ref
 });
 
 /// Provider para stream de mensajes en tiempo real
-final messagesStreamProvider = StreamProvider.family<Message, String>((ref, conversationId) {
+final messagesStreamProvider =
+    StreamProvider.family<Message, String>((ref, conversationId) {
   final repository = ref.watch(chatRepositoryProvider);
   return repository.subscribeToMessages(conversationId);
 });

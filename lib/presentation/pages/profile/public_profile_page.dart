@@ -30,9 +30,7 @@ class _PublicProfilePageState extends ConsumerState<PublicProfilePage> {
   void initState() {
     super.initState();
     _user = widget.user;
-    if (_user == null) {
-      _loadPublicProfile();
-    }
+    _loadPublicProfile();
     _checkFriendshipStatus();
     _checkBlockStatus();
   }

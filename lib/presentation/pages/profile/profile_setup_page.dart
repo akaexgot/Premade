@@ -3,13 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'package:premade/application/providers/auth_providers.dart';
 import 'package:premade/application/providers/profile_providers.dart';
 import 'package:premade/core/theme/app_colors.dart';
 import 'package:premade/domain/entities/user_profile_entity.dart';
 
 class ProfileSetupPage extends ConsumerStatefulWidget {
-  const ProfileSetupPage({Key? key}) : super(key: key);
+  const ProfileSetupPage({super.key});
 
   @override
   ConsumerState<ProfileSetupPage> createState() => _ProfileSetupPageState();
@@ -19,6 +18,7 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
   late TextEditingController _bioController;
   late TextEditingController _discordController;
   String? _avatarPath;
+  String? _uploadedAvatarUrl;
   int _currentStep = 0;
 
   @override
@@ -39,9 +39,12 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
     try {
       final ImagePicker picker = ImagePicker();
       final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-      
+
       if (image != null) {
-        setState(() => _avatarPath = image.path);
+        setState(() {
+          _avatarPath = image.path;
+          _uploadedAvatarUrl = null;
+        });
       }
     } catch (e) {
       _showError('Error al seleccionar imagen');
@@ -59,8 +62,9 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
         fileName: fileName,
       );
 
-      await ref.read(userProfileProvider.notifier).uploadAvatar(params);
-      
+      _uploadedAvatarUrl =
+          await ref.read(userProfileProvider.notifier).uploadAvatar(params);
+
       if (mounted) {
         _showSuccess('Avatar subido exitosamente');
       }
@@ -72,8 +76,21 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
   }
 
   Future<void> _updateProfile() async {
-    if (_bioController.text.trim().isEmpty) {
-      _showError('La bio es requerida');
+    final avatarError = _validateAvatar();
+    if (avatarError != null) {
+      _showError(avatarError);
+      return;
+    }
+
+    final bioError = _validateBio();
+    if (bioError != null) {
+      _showError(bioError);
+      return;
+    }
+
+    final discordError = _validateDiscord();
+    if (discordError != null) {
+      _showError(discordError);
       return;
     }
 
@@ -84,9 +101,10 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
       final params = UpdateProfileParams(
         nickname: null,
         bio: _bioController.text.trim(),
-        avatarUrl: null,
-        discordUsername:
-            _discordController.text.trim().isEmpty ? null : _discordController.text.trim(),
+        avatarUrl: _uploadedAvatarUrl,
+        discordUsername: _discordController.text.trim().isEmpty
+            ? null
+            : _discordController.text.trim(),
         autonomousRegion: null,
         province: null,
       );
@@ -97,10 +115,51 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
         context.go('/game-selection');
       }
     } catch (e) {
-      _showError('Error al guardar perfil: ${e.toString()}');
+      _showError(_profileSaveErrorMessage(e));
     } finally {
       ref.read(profileLoadingProvider.notifier).setLoading(false);
     }
+  }
+
+  String? _validateAvatar() {
+    if (_avatarPath != null && _uploadedAvatarUrl == null) {
+      return 'Sube el avatar antes de continuar';
+    }
+    return null;
+  }
+
+  String? _validateBio() {
+    final bio = _bioController.text.trim();
+    if (bio.isEmpty) {
+      return 'La bio es requerida';
+    }
+    if (bio.length < 10) {
+      return 'La bio debe tener al menos 10 caracteres';
+    }
+    if (bio.length > 500) {
+      return 'La bio no puede superar 500 caracteres';
+    }
+    return null;
+  }
+
+  String? _validateDiscord() {
+    final discord = _discordController.text.trim();
+    if (discord.isEmpty) {
+      return null;
+    }
+    if (discord.length < 2 || discord.length > 32) {
+      return 'El usuario de Discord debe tener entre 2 y 32 caracteres';
+    }
+    return null;
+  }
+
+  String _profileSaveErrorMessage(Object error) {
+    final message = error.toString();
+    if (message.contains('users_bio_check') ||
+        message.contains('La bio debe tener')) {
+      return 'La bio debe tener entre 10 y 500 caracteres';
+    }
+    return 'Error al guardar perfil. Intenta de nuevo';
   }
 
   void _showError(String message) {
@@ -121,7 +180,6 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
   Widget build(BuildContext context) {
     final isLoading = ref.watch(profileLoadingProvider);
     final error = ref.watch(profileErrorProvider);
-    final userProfile = ref.watch(userProfileProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -218,9 +276,7 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
                               color: Colors.grey[200],
                               image: _avatarPath != null
                                   ? DecorationImage(
-                                      image: FileImage(
-                                        File(_avatarPath!),
-                                      ),
+                                      image: FileImage(File(_avatarPath!)),
                                       fit: BoxFit.cover,
                                     )
                                   : null,
@@ -237,12 +293,12 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
                             bottom: 0,
                             right: 0,
                             child: Container(
-                              decoration: BoxDecoration(
+                              decoration: const BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: AppColors.primary,
                               ),
                               padding: const EdgeInsets.all(8),
-                              child: Icon(
+                              child: const Icon(
                                 Icons.camera_alt,
                                 color: Colors.white,
                                 size: 20,
@@ -357,7 +413,7 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
                 Center(
                   child: Column(
                     children: [
-                      Icon(
+                      const Icon(
                         Icons.games,
                         size: 64,
                         color: AppColors.primary,
@@ -400,13 +456,36 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
                       onPressed: isLoading
                           ? null
                           : () {
+                              ref
+                                  .read(profileErrorProvider.notifier)
+                                  .clearError();
+                              if (_currentStep == 0) {
+                                final avatarError = _validateAvatar();
+                                if (avatarError != null) {
+                                  _showError(avatarError);
+                                  return;
+                                }
+                              }
+                              if (_currentStep == 1) {
+                                final bioError = _validateBio();
+                                if (bioError != null) {
+                                  _showError(bioError);
+                                  return;
+                                }
+                                final discordError = _validateDiscord();
+                                if (discordError != null) {
+                                  _showError(discordError);
+                                  return;
+                                }
+                              }
                               if (_currentStep < 2) {
                                 setState(() => _currentStep++);
                               } else {
                                 _updateProfile();
                               }
                             },
-                      child: Text(_currentStep == 2 ? 'Continuar' : 'Siguiente'),
+                      child:
+                          Text(_currentStep == 2 ? 'Continuar' : 'Siguiente'),
                     ),
                   ),
                 ],

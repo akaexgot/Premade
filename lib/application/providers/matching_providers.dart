@@ -1,7 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:premade/application/providers/auth_providers.dart';
 import 'package:premade/core/network/supabase_service.dart';
-import 'package:premade/core/errors/failures.dart';
 import 'package:premade/data/datasources/matching_remote_data_source.dart';
 import 'package:premade/data/repositories/matching_repository_impl.dart';
 import 'package:premade/domain/entities/matching_entity.dart';
@@ -11,7 +9,8 @@ import 'package:premade/domain/usecases/matching_usecases.dart';
 // ============ DEPENDENCY INJECTION PROVIDERS ============
 
 /// Data source para matching
-final matchingRemoteDataSourceProvider = Provider<MatchingRemoteDataSource>((ref) {
+final matchingRemoteDataSourceProvider =
+    Provider<MatchingRemoteDataSource>((ref) {
   final supabaseService = ref.watch(supabaseServiceProvider);
   return MatchingRemoteDataSourceImpl(supabaseService);
 });
@@ -23,7 +22,8 @@ final matchingRepositoryProvider = Provider<MatchingRepository>((ref) {
 });
 
 /// Use cases
-final getMatchCandidatesUseCaseProvider = Provider<GetMatchCandidatesUseCase>((ref) {
+final getMatchCandidatesUseCaseProvider =
+    Provider<GetMatchCandidatesUseCase>((ref) {
   final repository = ref.watch(matchingRepositoryProvider);
   return GetMatchCandidatesUseCase(repository);
 });
@@ -43,7 +43,8 @@ final getUserSwipesUseCaseProvider = Provider<GetUserSwipesUseCase>((ref) {
   return GetUserSwipesUseCase(repository);
 });
 
-final getReceivedSwipesUseCaseProvider = Provider<GetReceivedSwipesUseCase>((ref) {
+final getReceivedSwipesUseCaseProvider =
+    Provider<GetReceivedSwipesUseCase>((ref) {
   final repository = ref.watch(matchingRepositoryProvider);
   return GetReceivedSwipesUseCase(repository);
 });
@@ -129,19 +130,22 @@ class UserMatchesNotifier extends StateNotifier<List<Match>> {
 // ============ STATE PROVIDERS ============
 
 /// Provider para candidatos de match
-final matchCandidatesProvider = StateNotifierProvider<MatchCandidatesNotifier, List<MatchCard>>((ref) {
+final matchCandidatesProvider =
+    StateNotifierProvider<MatchCandidatesNotifier, List<MatchCard>>((ref) {
   final useCase = ref.watch(getMatchCandidatesUseCaseProvider);
   return MatchCandidatesNotifier(useCase);
 });
 
 /// Provider para matches del usuario
-final userMatchesProvider = StateNotifierProvider<UserMatchesNotifier, List<Match>>((ref) {
+final userMatchesProvider =
+    StateNotifierProvider<UserMatchesNotifier, List<Match>>((ref) {
   final useCase = ref.watch(getUserMatchesUseCaseProvider);
   return UserMatchesNotifier(useCase);
 });
 
 /// Provider para candidatos con FutureProvider (auto-load)
-final matchCandidatesFutureProvider = FutureProvider<List<MatchCard>>((ref) async {
+final matchCandidatesFutureProvider =
+    FutureProvider<List<MatchCard>>((ref) async {
   final useCase = ref.watch(getMatchCandidatesUseCaseProvider);
   final result = await useCase();
   return result.fold(

@@ -7,7 +7,7 @@ import 'package:premade/core/validators/validators.dart';
 import 'package:premade/domain/entities/auth_entity.dart';
 
 class RegisterPage extends ConsumerStatefulWidget {
-  const RegisterPage({Key? key}) : super(key: key);
+  const RegisterPage({super.key});
 
   @override
   ConsumerState<RegisterPage> createState() => _RegisterPageState();
@@ -149,7 +149,6 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
     ref.read(authErrorProvider.notifier).clearError();
 
     try {
-      print('DEBUG: Iniciando _handleSignUp...');
       final params = SignUpParams(
         email: _emailController.text.trim(),
         password: _passwordController.text,
@@ -158,12 +157,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
         country: _selectedCountry!,
       );
 
-      print('DEBUG: Llamando a signUp notifier con timeout de 15s...');
-      await ref.read(authUserProvider.notifier).signUp(params).timeout(
-            const Duration(seconds: 15),
-            onTimeout: () => throw Exception(
-                'Tiempo de espera agotado. Revisa tu conexión.'),
-          );
+      await ref.read(authUserProvider.notifier).signUp(params);
 
       if (mounted) {
         context.go('/profile-setup');
@@ -186,10 +180,8 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
       return 'Este email ya está registrado';
     } else if (error.contains('Weak password')) {
       return 'La contraseña es muy débil';
-    } else if (error.contains('relation "users" does not exist')) {
-      return 'Error de base de datos: La tabla "users" no existe';
     }
-    return 'Error: ${error.replaceAll('Exception:', '').trim()}';
+    return 'Error al registrarse. Intenta de nuevo';
   }
 
   @override
@@ -208,50 +200,47 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Stepper visual
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: List.generate(
-                  5,
-                  (index) {
-                    if (index % 2 == 0) {
-                      final stepIndex = index ~/ 2;
-                      return Column(
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: stepIndex <= _currentStep
-                                  ? AppColors.primary
-                                  : Colors.grey[300],
-                            ),
-                            child: Center(
-                              child: Text(
-                                '${stepIndex + 1}',
-                                style: TextStyle(
-                                  color: stepIndex <= _currentStep
-                                      ? Colors.white
-                                      : Colors.grey[600],
-                                  fontWeight: FontWeight.bold,
-                                ),
+                  3,
+                  (index) => Expanded(
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: index <= _currentStep
+                                ? AppColors.primary
+                                : Colors.grey[300],
+                          ),
+                          child: Center(
+                            child: Text(
+                              '${index + 1}',
+                              style: TextStyle(
+                                color: index <= _currentStep
+                                    ? Colors.white
+                                    : Colors.grey[600],
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ),
-                        ],
-                      );
-                    } else {
-                      final stepIndex = index ~/ 2;
-                      return Expanded(
-                        child: Container(
-                          height: 2,
-                          color: stepIndex < _currentStep
-                              ? AppColors.primary
-                              : Colors.grey[300],
                         ),
-                      );
-                    }
-                  },
+                        const SizedBox(height: 8),
+                        if (index < 2)
+                          Container(
+                            width: double.infinity,
+                            height: 2,
+                            color: index < _currentStep
+                                ? AppColors.primary
+                                : Colors.grey[300],
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 32),
@@ -475,7 +464,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  value: _selectedCountry,
+                  initialValue: _selectedCountry,
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.public_outlined),
                     border: OutlineInputBorder(
@@ -513,12 +502,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                       child: OutlinedButton(
                         onPressed: isLoading
                             ? null
-                            : () {
-                                ref
-                                    .read(authErrorProvider.notifier)
-                                    .clearError();
-                                setState(() => _currentStep--);
-                              },
+                            : () => setState(() => _currentStep--),
                         child: const Text('Atrás'),
                       ),
                     ),
@@ -538,9 +522,6 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                               }
 
                               if (isValid) {
-                                ref
-                                    .read(authErrorProvider.notifier)
-                                    .clearError();
                                 if (_currentStep < 2) {
                                   setState(() => _currentStep++);
                                 } else {

@@ -41,6 +41,9 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
           final convId = conv['id']?.toString() ?? '';
           final isGroup = conv['is_group'] == true;
           final messages = conv['messages'] as List? ?? [];
+          final lastReadAt = DateTime.tryParse(
+            cp['last_read_at']?.toString() ?? '',
+          );
 
           // Obtener último mensaje
           String lastMessage = '';
@@ -61,6 +64,15 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
                 DateTime.tryParse(lastMsg['created_at']?.toString() ?? '') ??
                     DateTime.now();
           }
+
+          final unreadCount = messages.where((message) {
+            if (message is! Map<String, dynamic>) return false;
+            if (message['sender_id']?.toString() == myProfileId) return false;
+            final createdAt =
+                DateTime.tryParse(message['created_at']?.toString() ?? '');
+            if (createdAt == null) return false;
+            return lastReadAt == null || createdAt.isAfter(lastReadAt);
+          }).length;
 
           // Para conversación 1-a-1, buscar el otro participante
           String otherUserId = '';
@@ -105,7 +117,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
             otherUserIsOnline: otherUserIsOnline,
             lastMessage: lastMessage,
             lastMessageTime: lastMessageTime,
-            unreadCount: 0, // TODO: calcular mensajes no leídos
+            unreadCount: unreadCount,
             isGroup: isGroup,
           ));
         } catch (e) {
@@ -207,14 +219,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   Future<void> markMessagesAsRead(String conversationId) async {
     // Mark messages as read - update last_read_at en conversation_participants
     try {
-      final myProfileId = await supabaseService.getProfileId();
-      if (myProfileId == null) return;
-
-      await supabaseService.client
-          .from('conversation_participants')
-          .update({'last_read_at': DateTime.now().toIso8601String()})
-          .eq('conversation_id', conversationId)
-          .eq('user_id', myProfileId);
+      await supabaseService.markConversationAsRead(conversationId);
     } catch (e) {
       print('DEBUG: Error marking messages as read: $e');
     }

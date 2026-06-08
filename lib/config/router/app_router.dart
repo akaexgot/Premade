@@ -11,6 +11,7 @@ import 'package:premade/presentation/pages/profile/edit_profile_page.dart';
 import 'package:premade/presentation/pages/profile/my_games_page.dart';
 import 'package:premade/presentation/pages/profile/settings_page.dart';
 import 'package:premade/presentation/pages/profile/public_profile_page.dart';
+import 'package:premade/presentation/pages/admin/admin_panel_page.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -72,6 +73,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/settings',
       builder: (context, state) => const SettingsPage(),
+    ),
+    GoRoute(
+      path: '/admin',
+      builder: (context, state) => const AdminPanelPage(),
     ),
     GoRoute(
       path: '/public-profile/:profileId',

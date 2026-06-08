@@ -57,10 +57,12 @@ class SupabaseService {
 
   /// Cache del ID de perfil real (public.users.id)
   String? _profileId;
+  String? _profileAuthId;
 
   /// Limpiar cache al cerrar sesión o inicializar
   void _clearCache() {
     _profileId = null;
+    _profileAuthId = null;
   }
 
   /// Limpiar datos cacheados cuando cambia la sesión activa.
@@ -71,10 +73,13 @@ class SupabaseService {
   /// Obtener el ID de perfil real (el PK de la tabla public.users)
   /// Se diferencia del Auth ID que devuelve currentUser.id
   Future<String?> getProfileId() async {
-    if (_profileId != null) return _profileId;
-
     final authId = currentUserId;
     if (authId == null) return null;
+    if (_profileId != null && _profileAuthId == authId) return _profileId;
+    if (_profileAuthId != authId) {
+      _profileId = null;
+      _profileAuthId = authId;
+    }
 
     try {
       final response = await _client
@@ -85,12 +90,28 @@ class SupabaseService {
 
       if (response != null) {
         _profileId = response['id'] as String;
+        _profileAuthId = authId;
       }
       return _profileId;
     } catch (e) {
       print('DEBUG: Error al obtener Profile ID: $e');
       return null;
     }
+  }
+
+  Future<String?> _resolveProfileId([String? id]) async {
+    if (id == null) return getProfileId();
+
+    final byProfileId =
+        await _client.from('users').select('id').eq('id', id).maybeSingle();
+    if (byProfileId != null) return byProfileId['id'] as String;
+
+    final byAuthId = await _client
+        .from('users')
+        .select('id')
+        .eq('auth_id', id)
+        .maybeSingle();
+    return byAuthId?['id'] as String?;
   }
 
   // ============================================================================
@@ -113,10 +134,12 @@ class SupabaseService {
     required String email,
     required String password,
   }) async {
-    return await _client.auth.signInWithPassword(
+    final response = await _client.auth.signInWithPassword(
       email: email,
       password: password,
     );
+    await _throwIfCurrentUserBanned();
+    return response;
   }
 
   /// Login con Google
@@ -131,6 +154,27 @@ class SupabaseService {
   Future<void> signOut() async {
     await _client.auth.signOut();
     _clearCache();
+  }
+
+  Future<void> _throwIfCurrentUserBanned() async {
+    final uid = currentUser?.id;
+    if (uid == null) return;
+
+    final profile = await _client
+        .from('users')
+        .select('banned_at, ban_reason')
+        .eq('auth_id', uid)
+        .maybeSingle();
+
+    if (profile?['banned_at'] != null) {
+      await signOut();
+      final reason = profile?['ban_reason']?.toString();
+      throw Exception(
+        reason == null || reason.isEmpty
+            ? 'Tu cuenta ha sido baneada.'
+            : 'Tu cuenta ha sido baneada: $reason',
+      );
+    }
   }
 
   /// Reset password
@@ -237,14 +281,30 @@ class SupabaseService {
 
     if (nickname != null) updates['nickname'] = nickname;
     if (age != null) updates['age'] = age;
-    if (bio != null) updates['bio'] = bio;
+    if (bio != null) {
+      final trimmedBio = bio.trim();
+      if (trimmedBio.isEmpty) {
+        updates['bio'] = null;
+      } else if (trimmedBio.length < 10 || trimmedBio.length > 500) {
+        throw Exception('La bio debe tener entre 10 y 500 caracteres');
+      } else {
+        updates['bio'] = trimmedBio;
+      }
+    }
     if (country != null) updates['country'] = country;
     if (autonomousRegion != null) {
       updates['autonomous_region'] = autonomousRegion;
     }
     if (province != null) updates['province'] = province;
     final discordValue = discordUsername ?? discord;
-    if (discordValue != null) updates['discord_username'] = discordValue;
+    if (discordValue != null) {
+      final trimmedDiscord = discordValue.trim();
+      if (trimmedDiscord.length > 32) {
+        throw Exception('El usuario de Discord no puede superar 32 caracteres');
+      }
+      updates['discord_username'] =
+          trimmedDiscord.isEmpty ? null : trimmedDiscord;
+    }
     if (avatarUrl != null) updates['avatar_url'] = avatarUrl;
 
     await _client.from('users').update(updates).eq('auth_id', uid);
@@ -303,13 +363,13 @@ class SupabaseService {
 
   /// Obtener juegos de un usuario
   Future<List<Map<String, dynamic>>> getUserGames([String? profileId]) async {
-    final pid = profileId ?? await getProfileId();
+    final pid = await _resolveProfileId(profileId);
     if (pid == null) return [];
 
     return await _client
         .from('user_games')
         .select(
-            '*, game:games(*), primary_rank:game_ranks(*), main_role:game_roles(*)')
+            '*, game:games(*), primary_rank:game_ranks!user_games_primary_rank_id_fkey(*), secondary_rank:game_ranks!user_games_secondary_rank_id_fkey(*), main_role:game_roles!user_games_main_role_id_fkey(*), secondary_role:game_roles!user_games_secondary_role_id_fkey(*)')
         .eq('user_id', pid);
   }
 
@@ -410,10 +470,14 @@ class SupabaseService {
     int limit = 10,
   }) async {
     final pid = await getProfileId();
+    if (pid == null) {
+      print('DEBUG: No se pudo obtener el perfil actual para matching');
+      return [];
+    }
 
     try {
       final params = {
-        'p_user_id': pid,
+        'p_auth_id': authId,
         'p_country': country,
         'p_game_id': gameId,
         'p_limit': limit,
@@ -434,11 +498,45 @@ class SupabaseService {
       final mySwipes = await _client
           .from('swipes')
           .select('target_user_id')
-          .eq('user_id', pid ?? '');
+          .eq('user_id', pid);
 
       final List<String> swipedIds = (mySwipes as List)
           .map((s) => s['target_user_id'].toString())
           .toList();
+
+      final myMatches = await _client
+          .from('matches')
+          .select('user_id_1, user_id_2')
+          .eq('is_active', true)
+          .or('user_id_1.eq.$pid,user_id_2.eq.$pid');
+      final matchedIds = (myMatches as List)
+          .map((match) {
+            final user1 = match['user_id_1']?.toString();
+            final user2 = match['user_id_2']?.toString();
+            return user1 == pid ? user2 : user1;
+          })
+          .whereType<String>()
+          .toList();
+
+      final myFriendships = await _client
+          .from('friendships')
+          .select('user_id_1, user_id_2')
+          .inFilter('status', ['pending', 'accepted']).or(
+              'user_id_1.eq.$pid,user_id_2.eq.$pid');
+      final friendshipIds = (myFriendships as List)
+          .map((friendship) {
+            final user1 = friendship['user_id_1']?.toString();
+            final user2 = friendship['user_id_2']?.toString();
+            return user1 == pid ? user2 : user1;
+          })
+          .whereType<String>()
+          .toList();
+
+      final excludedIds = {
+        ...swipedIds,
+        ...matchedIds,
+        ...friendshipIds,
+      }.toList();
 
       // Fallback manual
       // Si hay gameId, usamos !inner para filtrar usuarios que tengan ese juego
@@ -447,11 +545,15 @@ class SupabaseService {
         selectString = '*, user_games!inner(game:games(*))';
       }
 
-      var query =
-          _client.from('users').select(selectString).neq('auth_id', authId);
+      var query = _client
+          .from('users')
+          .select(selectString)
+          .neq('auth_id', authId)
+          .filter('deleted_at', 'is', null)
+          .filter('banned_at', 'is', null);
 
-      if (swipedIds.isNotEmpty) {
-        query = query.not('id', 'in', swipedIds);
+      if (excludedIds.isNotEmpty) {
+        query = query.not('id', 'in', excludedIds);
       }
 
       if (country != null) query = query.eq('country', country);
@@ -475,6 +577,20 @@ class SupabaseService {
     final myProfileId = await getProfileId();
     if (myProfileId == null) throw Exception('Perfil no encontrado');
     final normalizedAction = action == 'pass' ? 'dislike' : action;
+
+    try {
+      final response = await _client.rpc(
+        'perform_swipe',
+        params: {
+          'p_target_user_id': targetUserId,
+          'p_action': normalizedAction,
+          'p_compatibility_score': compatibilityScore,
+        },
+      );
+      return response == true;
+    } catch (e) {
+      print('DEBUG: perform_swipe RPC no disponible. Fallback directo... $e');
+    }
 
     // 1. Insertar el swipe actual
     await _client.from('swipes').upsert(
@@ -547,10 +663,41 @@ class SupabaseService {
     return await _client
         .from('conversation_participants')
         .select(
-          'id, conversation:conversations(id, is_group, created_at, messages(content, created_at, sender_id), group:groups(name))',
+          'id, last_read_at, conversation:conversations(id, is_group, created_at, messages(content, created_at, sender_id), group:groups(name))',
         )
         .eq('user_id', pid)
         .order('joined_at', ascending: false);
+  }
+
+  Future<int> getUnreadConversationsCount() async {
+    final pid = await getProfileId();
+    if (pid == null) return 0;
+
+    final conversations = await getConversations(pid);
+    var unreadConversations = 0;
+
+    for (final cp in conversations) {
+      final conv = cp['conversation'];
+      if (conv is! Map<String, dynamic>) continue;
+
+      final messages = conv['messages'] as List? ?? [];
+      final lastReadAt = DateTime.tryParse(
+        cp['last_read_at']?.toString() ?? '',
+      );
+
+      final hasUnread = messages.any((message) {
+        if (message is! Map<String, dynamic>) return false;
+        if (message['sender_id']?.toString() == pid) return false;
+        final createdAt =
+            DateTime.tryParse(message['created_at']?.toString() ?? '');
+        if (createdAt == null) return false;
+        return lastReadAt == null || createdAt.isAfter(lastReadAt);
+      });
+
+      if (hasUnread) unreadConversations++;
+    }
+
+    return unreadConversations;
   }
 
   /// Obtener o crear una conversación 1-a-1 con otro usuario
@@ -559,6 +706,19 @@ class SupabaseService {
     if (myProfileId == null) throw Exception('Usuario no autenticado');
 
     // 1. Buscar si ya existe una conversación 1-a-1 entre ambos
+    try {
+      final response = await _client.rpc(
+        'get_or_create_conversation',
+        params: {'p_other_profile_id': otherUserId},
+      );
+      if (response != null) {
+        return response.toString();
+      }
+    } catch (e) {
+      print(
+          'DEBUG: Fallo al llamar get_or_create_conversation RPC. Usando fallback... $e');
+    }
+
     final myConversations = await _client
         .from('conversation_participants')
         .select('conversation_id')
@@ -600,6 +760,34 @@ class SupabaseService {
         .limit(limit);
   }
 
+  Future<Map<String, dynamic>?> getConversationPeer(
+      String conversationId) async {
+    final myProfileId = await getProfileId();
+    if (myProfileId == null) return null;
+
+    final participants = await _client
+        .from('conversation_participants')
+        .select('user:users(id, nickname, avatar_url, is_online)')
+        .eq('conversation_id', conversationId)
+        .neq('user_id', myProfileId)
+        .limit(1);
+
+    if (participants.isEmpty) return null;
+    final user = participants.first['user'];
+    return user is Map<String, dynamic> ? user : null;
+  }
+
+  Future<void> markConversationAsRead(String conversationId) async {
+    final myProfileId = await getProfileId();
+    if (myProfileId == null) return;
+
+    await _client
+        .from('conversation_participants')
+        .update({'last_read_at': DateTime.now().toIso8601String()})
+        .eq('conversation_id', conversationId)
+        .eq('user_id', myProfileId);
+  }
+
   /// Enviar mensaje
   Future<Map<String, dynamic>> sendMessage({
     required String conversationId,
@@ -607,6 +795,23 @@ class SupabaseService {
   }) async {
     final pid = await getProfileId();
     if (pid == null) throw Exception('Usuario no autenticado');
+
+    try {
+      final response = await _client
+          .rpc(
+            'send_chat_message',
+            params: {
+              'p_conversation_id': conversationId,
+              'p_content': content,
+            },
+          )
+          .select('*, sender:users(id, nickname, avatar_url)')
+          .single();
+      return response;
+    } catch (e) {
+      print(
+          'DEBUG: Fallo al llamar send_chat_message RPC. Usando fallback... $e');
+    }
 
     return await _client
         .from('messages')
@@ -829,23 +1034,164 @@ class SupabaseService {
       await _client.from('reports').insert({
         'reporter_user_id': myProfileId,
         'reported_user_id': reportedProfileId,
-        'reason': reason,
-        'description': details,
-      });
-    } catch (e) {
-      if (!e.toString().contains('reporter_user_id') &&
-          !e.toString().contains('reported_user_id') &&
-          !e.toString().contains('description')) {
-        rethrow;
-      }
-
-      await _client.from('reports').insert({
         'reporter_id': myProfileId,
         'reported_id': reportedProfileId,
         'reason': reason,
+        'description': details,
         'details': details,
       });
+    } catch (_) {
+      try {
+        await _client.from('reports').insert({
+          'reporter_user_id': myProfileId,
+          'reported_user_id': reportedProfileId,
+          'reason': reason,
+          'description': details,
+        });
+      } catch (e) {
+        if (!e.toString().contains('reporter_user_id') &&
+            !e.toString().contains('reported_user_id') &&
+            !e.toString().contains('description') &&
+            !e.toString().contains('reporter_id') &&
+            !e.toString().contains('reported_id') &&
+            !e.toString().contains('details')) {
+          rethrow;
+        }
+
+        await _client.from('reports').insert({
+          'reporter_id': myProfileId,
+          'reported_id': reportedProfileId,
+          'reason': reason,
+          'details': details,
+        });
+      }
     }
+  }
+
+  // ============================================================================
+  // DATABASE - ADMIN
+  // ============================================================================
+
+  Future<bool> isCurrentUserAdmin() async {
+    final profileId = await getProfileId();
+    if (profileId == null) return false;
+
+    try {
+      final response = await _client
+          .from('users')
+          .select('role')
+          .eq('id', profileId)
+          .maybeSingle();
+      return response?['role'] == 'admin';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> adminListUsers() async {
+    final response = await _client.rpc('admin_list_users');
+    return List<Map<String, dynamic>>.from(response as List);
+  }
+
+  Future<Map<String, dynamic>> adminGetStats() async {
+    final response = await _client.rpc('admin_get_stats');
+    return Map<String, dynamic>.from(response as Map);
+  }
+
+  Future<List<Map<String, dynamic>>> adminListBannedUsers() async {
+    final response = await _client.rpc('admin_list_banned_users');
+    return List<Map<String, dynamic>>.from(response as List);
+  }
+
+  Future<List<Map<String, dynamic>>> adminListReports() async {
+    final response = await _client.rpc('admin_list_reports');
+    return List<Map<String, dynamic>>.from(response as List);
+  }
+
+  Future<void> adminCreateUserProfile({
+    required String authId,
+    required String email,
+    required String nickname,
+    required int age,
+    required String country,
+    required String role,
+  }) async {
+    await _client.rpc(
+      'admin_create_user_profile',
+      params: {
+        'p_auth_id': authId,
+        'p_email': email,
+        'p_nickname': nickname,
+        'p_age': age,
+        'p_country': country,
+        'p_role': role,
+      },
+    );
+  }
+
+  Future<void> adminUpdateUserProfile({
+    required String profileId,
+    required String nickname,
+    required String email,
+    required int age,
+    required String country,
+    required String role,
+    String? bio,
+    String? discordUsername,
+  }) async {
+    await _client.rpc(
+      'admin_update_user_profile',
+      params: {
+        'p_profile_id': profileId,
+        'p_email': email,
+        'p_nickname': nickname,
+        'p_age': age,
+        'p_country': country,
+        'p_role': role,
+        'p_bio': bio,
+        'p_discord_username': discordUsername,
+      },
+    );
+  }
+
+  Future<void> adminDeleteUserProfile(String profileId) async {
+    await _client.rpc(
+      'admin_delete_user_profile',
+      params: {'p_profile_id': profileId},
+    );
+  }
+
+  Future<void> adminBanUser({
+    required String profileId,
+    String? reason,
+  }) async {
+    await _client.rpc(
+      'admin_ban_user',
+      params: {
+        'p_profile_id': profileId,
+        'p_reason': reason,
+      },
+    );
+  }
+
+  Future<void> adminUnbanUser(String profileId) async {
+    await _client.rpc(
+      'admin_unban_user',
+      params: {'p_profile_id': profileId},
+    );
+  }
+
+  Future<void> adminUpdateReportStatus({
+    required String reportId,
+    required String status,
+  }) async {
+    await _client.rpc(
+      'admin_update_report_status',
+      params: {
+        'p_report_id': reportId,
+        'p_status': status,
+      },
+    );
   }
 
   // ============================================================================

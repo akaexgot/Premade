@@ -7,7 +7,9 @@ import 'package:go_router/go_router.dart';
 
 /// SearchPage: Buscar jugadores por nombre o filtros
 class SearchPage extends ConsumerStatefulWidget {
-  const SearchPage({Key? key}) : super(key: key);
+  final bool showHeader;
+
+  const SearchPage({super.key, this.showHeader = true});
 
   @override
   ConsumerState<SearchPage> createState() => _SearchPageState();
@@ -132,20 +134,22 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Header ──
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              child: Text(
-                'Buscar',
-                style: TextStyle(
-                  fontSize: 34,
-                  fontWeight: FontWeight.w800,
-                  color: textPrimary,
-                  letterSpacing: -0.5,
+            if (widget.showHeader) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                child: Text(
+                  'Descubrir',
+                  style: TextStyle(
+                    fontSize: 34,
+                    fontWeight: FontWeight.w800,
+                    color: textPrimary,
+                    letterSpacing: -0.5,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
+            ] else
+              const SizedBox(height: 12),
 
             // ── Search bar ──
             Padding(

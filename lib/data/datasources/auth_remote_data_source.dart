@@ -1,6 +1,6 @@
+import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import 'package:premade/core/network/supabase_service.dart';
 import 'package:premade/domain/entities/auth_entity.dart';
-import 'package:gotrue/gotrue.dart' as gotrue;
 
 abstract class AuthRemoteDataSource {
   Future<AuthResponse> signUp(SignUpParams params);
@@ -17,97 +17,37 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
   AuthRemoteDataSourceImpl(this.supabaseService);
 
-  AuthResponse _mapAuthResponse(gotrue.AuthResponse response) {
-    final user = response.user;
-    if (user == null) throw Exception('No user found in response');
-
-    return AuthResponse(
-      user: AuthUser(
-        id: user.id,
-        email: user.email ?? '',
-        nickname: user.userMetadata?['nickname'],
-        isEmailVerified: user.emailConfirmedAt != null,
-        createdAt: DateTime.tryParse(user.createdAt) ?? DateTime.now(),
-      ),
-      accessToken: response.session?.accessToken,
-      refreshToken: response.session?.refreshToken,
-    );
-  }
-
   @override
   Future<AuthResponse> signUp(SignUpParams params) async {
     try {
-      print(
-          'DEBUG: AuthRemoteDataSourceImpl.signUp - Iniciando signUp en Supabase...');
+      // Usar el método signUp de SupabaseService
       final response = await supabaseService.signUp(
         email: params.email,
         password: params.password,
       );
-      print(
-          'DEBUG: AuthRemoteDataSourceImpl.signUp - signUp en Supabase completado');
 
-      print(
-          'DEBUG: AuthRemoteDataSourceImpl.signUp - Creando perfil de usuario...');
+      // Crear perfil de usuario en BD
       await supabaseService.createUserProfile(
-        userId: response.user?.id,
-        email: response.user?.email,
         nickname: params.nickname,
         age: params.age,
         country: params.country,
       );
-      print('DEBUG: AuthRemoteDataSourceImpl.signUp - Perfil creado');
 
       return _mapAuthResponse(response);
     } catch (e) {
-      print('DEBUG: Error en AuthRemoteDataSourceImpl.signUp: $e');
       rethrow;
     }
   }
 
+  @override
   Future<AuthResponse> signIn(SignInParams params) async {
     try {
-      // Test de conectividad primero
-      print('DEBUG: Testeando conectividad con Supabase...');
-      try {
-        final testResponse = await supabaseService.client
-            .from('users')
-            .select('id')
-            .limit(1)
-            .timeout(const Duration(seconds: 10));
-        print('DEBUG: Conectividad OK - hay ${testResponse.length} usuarios');
-      } catch (e) {
-        print('DEBUG: ERROR DE CONECTIVIDAD: $e');
-        throw Exception(
-            'No se puede conectar con el servidor. Verifica tu conexión a internet.');
-      }
-
-      // Limpiar sesión anterior
-      print('DEBUG: Limpiando sesión anterior...');
-      try {
-        supabaseService.clearProfileCache();
-        await supabaseService.client.auth.signOut().timeout(
-          const Duration(seconds: 5),
-          onTimeout: () {
-            print('DEBUG: signOut timeout (ignorado)');
-          },
-        );
-      } catch (_) {}
-
-      print('DEBUG: Intentando signIn con email: ${params.email}');
-      final response = await supabaseService.client.auth
-          .signInWithPassword(
-            email: params.email,
-            password: params.password,
-          )
-          .timeout(
-            const Duration(seconds: 30),
-            onTimeout: () => throw Exception('Timeout de 30s en signIn'),
-          );
-
-      print('DEBUG: signIn completado. User ID: ${response.user?.id}');
+      final response = await supabaseService.signIn(
+        email: params.email,
+        password: params.password,
+      );
       return _mapAuthResponse(response);
     } catch (e) {
-      print('DEBUG: Error en signIn: $e');
       rethrow;
     }
   }
@@ -115,26 +55,19 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   @override
   Future<AuthResponse> signInWithGoogle() async {
     try {
-      final success = await supabaseService.signInWithGoogle();
-      if (!success) throw Exception('Google sign in was not successful');
+      final didStart = await supabaseService.signInWithGoogle();
+      if (!didStart) {
+        throw Exception('No se pudo iniciar sesión con Google');
+      }
 
       final session = supabaseService.currentSession;
-      final user = supabaseService.currentUser;
+      final user = supabaseService.getCurrentUser();
+      if (session == null || user == null) {
+        throw Exception(
+            'El login con Google requiere completar la redirección');
+      }
 
-      if (session == null || user == null)
-        throw Exception('No session after Google sign in');
-
-      return AuthResponse(
-        user: AuthUser(
-          id: user.id,
-          email: user.email ?? '',
-          nickname: user.userMetadata?['nickname'],
-          isEmailVerified: user.emailConfirmedAt != null,
-          createdAt: DateTime.tryParse(user.createdAt) ?? DateTime.now(),
-        ),
-        accessToken: session.accessToken,
-        refreshToken: session.refreshToken,
-      );
+      return _mapSession(user, session);
     } catch (e) {
       rethrow;
     }
@@ -165,14 +98,22 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       if (user == null) return null;
 
       final profile = await supabaseService.getUserProfile(user.id);
-      if (profile == null) return null;
+      if (profile?['banned_at'] != null) {
+        await supabaseService.signOut();
+        final reason = profile?['ban_reason']?.toString();
+        throw Exception(
+          reason == null || reason.isEmpty
+              ? 'Tu cuenta ha sido baneada.'
+              : 'Tu cuenta ha sido baneada: $reason',
+        );
+      }
 
       return AuthUser(
         id: user.id,
         email: user.email ?? '',
-        nickname: profile['nickname'],
+        nickname: profile?['nickname']?.toString(),
         isEmailVerified: user.emailConfirmedAt != null,
-        createdAt: DateTime.tryParse(user.createdAt) ?? DateTime.now(),
+        createdAt: _parseCreatedAt(user.createdAt),
       );
     } catch (e) {
       rethrow;
@@ -187,5 +128,36 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     } catch (e) {
       return false;
     }
+  }
+
+  AuthResponse _mapAuthResponse(supabase.AuthResponse response) {
+    final user = response.user;
+    final session = response.session;
+
+    if (user == null) {
+      throw Exception('Respuesta de autenticación sin usuario');
+    }
+
+    return _mapSession(user, session);
+  }
+
+  AuthResponse _mapSession(supabase.User user, supabase.Session? session) {
+    return AuthResponse(
+      user: AuthUser(
+        id: user.id,
+        email: user.email ?? '',
+        nickname: user.userMetadata?['nickname']?.toString(),
+        isEmailVerified: user.emailConfirmedAt != null,
+        createdAt: _parseCreatedAt(user.createdAt),
+      ),
+      accessToken: session?.accessToken,
+      refreshToken: session?.refreshToken,
+    );
+  }
+
+  DateTime _parseCreatedAt(Object? value) {
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
+    return DateTime.now();
   }
 }

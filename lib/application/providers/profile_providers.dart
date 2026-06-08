@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:premade/core/errors/failures.dart';
 import 'package:premade/core/network/supabase_service.dart';
 import 'package:premade/data/datasources/profile_remote_data_source.dart';
 import 'package:premade/data/repositories/profile_repository_impl.dart';
@@ -98,8 +97,12 @@ class UserProfileNotifier extends StateNotifier<UserProfile?> {
     try {
       final result = await ref.read(getUserProfileUseCaseProvider).call(userId);
       result.fold(
-        (failure) { state = null; },
-        (profile) { state = profile; },
+        (failure) {
+          state = null;
+        },
+        (profile) {
+          state = profile;
+        },
       );
     } catch (e) {
       state = null;
@@ -108,11 +111,10 @@ class UserProfileNotifier extends StateNotifier<UserProfile?> {
 
   Future<void> updateProfile(UpdateProfileParams params) async {
     try {
-      final result =
-          await ref.read(updateProfileUseCaseProvider).call(params);
+      final result = await ref.read(updateProfileUseCaseProvider).call(params);
       result.fold(
         (failure) {
-          throw Exception((failure as Failure).message);
+          throw Exception(failure.message);
         },
         (profile) {
           state = profile;
@@ -125,8 +127,7 @@ class UserProfileNotifier extends StateNotifier<UserProfile?> {
 
   Future<String> uploadAvatar(UploadAvatarParams params) async {
     try {
-      final result =
-          await ref.read(uploadAvatarUseCaseProvider).call(params);
+      final result = await ref.read(uploadAvatarUseCaseProvider).call(params);
       return result.fold(
         (failure) {
           throw Exception(failure.message);
@@ -149,7 +150,7 @@ class UserProfileNotifier extends StateNotifier<UserProfile?> {
       final result = await ref.read(addUserGameUseCaseProvider).call(params);
       result.fold(
         (failure) {
-          throw Exception((failure as Failure).message);
+          throw Exception(failure.message);
         },
         (_) {
           // Juego agregado exitosamente
@@ -192,7 +193,7 @@ class UserGamesNotifier extends StateNotifier<List<UserGameSelection>?> {
       final result = await ref.read(addUserGameUseCaseProvider).call(params);
       result.fold(
         (failure) {
-          throw Exception((failure as Failure).message);
+          throw Exception(failure.message);
         },
         (_) {
           // Recargar juegos
@@ -212,7 +213,7 @@ class UserGamesNotifier extends StateNotifier<List<UserGameSelection>?> {
       final result = await ref.read(removeUserGameUseCaseProvider).call(gameId);
       result.fold(
         (failure) {
-          throw Exception((failure as Failure).message);
+          throw Exception(failure.message);
         },
         (_) {
           // Remover del estado local
@@ -226,11 +227,10 @@ class UserGamesNotifier extends StateNotifier<List<UserGameSelection>?> {
 
   Future<void> updateGame(AddUserGameParams params) async {
     try {
-      final result =
-          await ref.read(updateUserGameUseCaseProvider).call(params);
+      final result = await ref.read(updateUserGameUseCaseProvider).call(params);
       result.fold(
         (failure) {
-          throw Exception((failure as Failure).message);
+          throw Exception(failure.message);
         },
         (_) {
           // Recargar juegos
@@ -256,7 +256,8 @@ final gamesListProvider =
     final result = await ref.read(getGamesListUseCaseProvider).call();
     return result.fold(
       (failure) {
-        print('DEBUG gamesListProvider: Error al obtener juegos: ${failure.message}');
+        print(
+            'DEBUG gamesListProvider: Error al obtener juegos: ${failure.message}');
         return <Map<String, dynamic>>[];
       },
       (games) {
@@ -275,7 +276,8 @@ final gamesListProvider =
 // ============================================================================
 
 final gameRolesProvider =
-    FutureProvider.family<List<Map<String, dynamic>>, String>((ref, gameId) async {
+    FutureProvider.family<List<Map<String, dynamic>>, String>(
+        (ref, gameId) async {
   final result = await ref.read(getGameRolesUseCaseProvider).call(gameId);
   return result.fold(
     (failure) => [],
@@ -288,7 +290,8 @@ final gameRolesProvider =
 // ============================================================================
 
 final gameRanksProvider =
-    FutureProvider.family<List<Map<String, dynamic>>, String>((ref, gameId) async {
+    FutureProvider.family<List<Map<String, dynamic>>, String>(
+        (ref, gameId) async {
   final result = await ref.read(getGameRanksUseCaseProvider).call(gameId);
   return result.fold(
     (failure) => [],

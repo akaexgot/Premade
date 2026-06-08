@@ -15,20 +15,11 @@ class LoginPage extends ConsumerStatefulWidget {
 }
 
 class _LoginPageState extends ConsumerState<LoginPage> {
-  late TextEditingController _emailController;
-  late TextEditingController _passwordController;
-  late FocusNode _emailFocus;
-  late FocusNode _passwordFocus;
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _emailFocus = FocusNode();
+  final _passwordFocus = FocusNode();
   bool _obscurePassword = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _emailController = TextEditingController();
-    _passwordController = TextEditingController();
-    _emailFocus = FocusNode();
-    _passwordFocus = FocusNode();
-  }
 
   @override
   void dispose() {
@@ -46,33 +37,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     ref.read(authErrorProvider.notifier).clearError();
 
     try {
-      final params = SignInParams(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      );
-
-      await ref.read(authUserProvider.notifier).signIn(params).timeout(
-            const Duration(seconds: 60),
-            onTimeout: () => throw Exception(
-                'Tiempo de espera agotado. Revisa tu conexion.'),
+      await ref.read(authUserProvider.notifier).signIn(
+            SignInParams(
+              email: _emailController.text.trim(),
+              password: _passwordController.text,
+            ),
           );
 
-      if (mounted) {
-        await _goToNextSetupStep();
-      }
-    } catch (e) {
-      ref.read(authErrorProvider.notifier).setError(_parseError(e.toString()));
-    } finally {
-      ref.read(authLoadingProvider.notifier).setLoading(false);
-    }
-  }
-
-  Future<void> _handleGoogleSignIn() async {
-    ref.read(authLoadingProvider.notifier).setLoading(true);
-    ref.read(authErrorProvider.notifier).clearError();
-
-    try {
-      await ref.read(authUserProvider.notifier).signInWithGoogle();
       if (mounted) await _goToNextSetupStep();
     } catch (e) {
       ref.read(authErrorProvider.notifier).setError(_parseError(e.toString()));
@@ -112,6 +83,22 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     return true;
   }
 
+  String _parseError(String error) {
+    if (error.contains('baneada') || error.contains('banned')) {
+      return error.replaceFirst('Exception: ', '');
+    }
+    if (error.contains('Invalid login credentials')) {
+      return 'Email o contrasena incorrectos';
+    }
+    if (error.contains('User not found')) {
+      return 'Usuario no registrado';
+    }
+    if (error.contains('Email not confirmed')) {
+      return 'Email no verificado. Revisa tu bandeja de entrada';
+    }
+    return 'Error al iniciar sesion. Intenta de nuevo';
+  }
+
   Future<void> _goToNextSetupStep() async {
     final supabase = ref.read(supabaseServiceProvider);
     final authId = supabase.currentUserId;
@@ -129,324 +116,182 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     context.go(games.isEmpty ? '/game-selection' : '/home');
   }
 
-  String _parseError(String error) {
-    if (error.contains('Invalid login credentials')) {
-      return 'Email o contrasena incorrectos';
-    } else if (error.contains('User not found')) {
-      return 'Usuario no registrado';
-    } else if (error.contains('Email not confirmed')) {
-      return 'Email no verificado. Revisa tu bandeja de entrada';
-    }
-    return 'Error al iniciar sesion. Intenta de nuevo';
-  }
-
   @override
   Widget build(BuildContext context) {
     final isLoading = ref.watch(authLoadingProvider);
     final error = ref.watch(authErrorProvider);
-    final topInset = MediaQuery.of(context).padding.top;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final textPrimary = theme.colorScheme.onSurface;
+    final textSecondary =
+        theme.textTheme.bodyMedium?.color ?? AppColors.textSecondary;
+    final surface = theme.colorScheme.surface;
+    final fieldColor = isDark ? const Color(0xFF1E1E36) : AppColors.grey100;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            _PremiumHero(topInset: topInset),
-            Transform.translate(
-              offset: const Offset(0, -26),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: _LoginSheet(
-                  emailController: _emailController,
-                  passwordController: _passwordController,
-                  emailFocus: _emailFocus,
-                  passwordFocus: _passwordFocus,
-                  obscurePassword: _obscurePassword,
-                  isLoading: isLoading,
-                  error: error,
-                  onTogglePassword: () => setState(
-                    () => _obscurePassword = !_obscurePassword,
-                  ),
-                  onForgotPassword: () => context.push('/forgot-password'),
-                  onSignIn: _handleSignIn,
-                  onGoogleSignIn: _handleGoogleSignIn,
-                ),
-              ),
-            ),
-            Transform.translate(
-              offset: const Offset(0, -10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'Nuevo en Premade?',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  TextButton(
-                    onPressed:
-                        isLoading ? null : () => context.push('/register'),
-                    child: const Text('Crear cuenta'),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 18),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PremiumHero extends StatelessWidget {
-  final double topInset;
-
-  const _PremiumHero({required this.topInset});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 302 + topInset,
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF07111F),
-            Color(0xFF0D2B4D),
-            Color(0xFF006F83),
-          ],
-        ),
-      ),
-      child: Stack(
-        children: [
-          Positioned.fill(child: CustomPaint(painter: _HeroLinesPainter())),
-          Positioned(
-            left: 24,
-            right: 24,
-            top: topInset + 28,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(22, 20, 22, 28),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    _LoginHero(
+                        textPrimary: textPrimary, textSecondary: textSecondary),
+                    const SizedBox(height: 30),
                     Container(
-                      width: 54,
-                      height: 54,
+                      padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(8),
+                        color: surface,
+                        borderRadius: BorderRadius.circular(24),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.22),
+                          color: isDark
+                              ? const Color(0xFF2A2A45)
+                              : AppColors.grey200,
                         ),
+                        boxShadow: isDark ? null : AppColors.softShadow,
                       ),
-                      child: const Icon(
-                        Icons.sports_esports_rounded,
-                        color: Colors.white,
-                        size: 30,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            'Inicia sesion',
+                            style: TextStyle(
+                              color: textPrimary,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Vuelve a tu equipo, chats y matches.',
+                            style: TextStyle(
+                              color: textSecondary,
+                              fontSize: 14,
+                              height: 1.35,
+                            ),
+                          ),
+                          const SizedBox(height: 22),
+                          _AuthField(
+                            controller: _emailController,
+                            focusNode: _emailFocus,
+                            enabled: !isLoading,
+                            keyboardType: TextInputType.emailAddress,
+                            label: 'Email',
+                            hint: 'correo@ejemplo.com',
+                            icon: Icons.alternate_email_rounded,
+                            fillColor: fieldColor,
+                          ),
+                          const SizedBox(height: 14),
+                          _AuthField(
+                            controller: _passwordController,
+                            focusNode: _passwordFocus,
+                            enabled: !isLoading,
+                            label: 'Contrasena',
+                            hint: 'Minimo 6 caracteres',
+                            icon: Icons.lock_rounded,
+                            fillColor: fieldColor,
+                            obscureText: _obscurePassword,
+                            suffix: IconButton(
+                              tooltip: _obscurePassword
+                                  ? 'Mostrar contrasena'
+                                  : 'Ocultar contrasena',
+                              onPressed: () => setState(
+                                () => _obscurePassword = !_obscurePassword,
+                              ),
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_rounded
+                                    : Icons.visibility_off_rounded,
+                              ),
+                            ),
+                          ),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: isLoading
+                                  ? null
+                                  : () => context.push('/forgot-password'),
+                              child: const Text('He olvidado mi contrasena'),
+                            ),
+                          ),
+                          if (error != null) ...[
+                            const SizedBox(height: 4),
+                            _ErrorBanner(message: error),
+                          ],
+                          const SizedBox(height: 18),
+                          SizedBox(
+                            height: 52,
+                            child: ElevatedButton.icon(
+                              onPressed: isLoading ? null : _handleSignIn,
+                              icon: isLoading
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Icon(Icons.login_rounded),
+                              label: Text(
+                                isLoading ? 'Entrando...' : 'Entrar',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                elevation: 0,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const Spacer(),
-                    const Icon(
-                      Icons.auto_awesome_rounded,
-                      color: AppColors.neonGreen,
-                      size: 24,
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'No tienes cuenta?',
+                          style: TextStyle(color: textSecondary),
+                        ),
+                        TextButton(
+                          onPressed: isLoading
+                              ? null
+                              : () => context.push('/register'),
+                          child: const Text('Registrate'),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                const SizedBox(height: 34),
-                const Text(
-                  'PREMADE',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 44,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0,
-                    height: 0.92,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Tu squad empieza aqui.',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.74),
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0,
-                  ),
-                ),
-                const SizedBox(height: 22),
-                const Row(
-                  children: [
-                    _HeroIconTile(icon: Icons.headset_mic_rounded),
-                    SizedBox(width: 10),
-                    _HeroIconTile(icon: Icons.bolt_rounded),
-                    SizedBox(width: 10),
-                    _HeroIconTile(icon: Icons.groups_rounded),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
 }
 
-class _LoginSheet extends StatelessWidget {
-  final TextEditingController emailController;
-  final TextEditingController passwordController;
-  final FocusNode emailFocus;
-  final FocusNode passwordFocus;
-  final bool obscurePassword;
-  final bool isLoading;
-  final String? error;
-  final VoidCallback onTogglePassword;
-  final VoidCallback onForgotPassword;
-  final VoidCallback onSignIn;
-  final VoidCallback onGoogleSignIn;
+class _LoginHero extends StatelessWidget {
+  final Color textPrimary;
+  final Color textSecondary;
 
-  const _LoginSheet({
-    required this.emailController,
-    required this.passwordController,
-    required this.emailFocus,
-    required this.passwordFocus,
-    required this.obscurePassword,
-    required this.isLoading,
-    required this.error,
-    required this.onTogglePassword,
-    required this.onForgotPassword,
-    required this.onSignIn,
-    required this.onGoogleSignIn,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.divider),
-        boxShadow: AppColors.cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Entrar',
-            style: theme.textTheme.headlineLarge?.copyWith(
-              fontSize: 28,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0,
-            ),
-          ),
-          const SizedBox(height: 20),
-          _LoginInput(
-            label: 'Email',
-            controller: emailController,
-            focusNode: emailFocus,
-            enabled: !isLoading,
-            keyboardType: TextInputType.emailAddress,
-            icon: Icons.alternate_email_rounded,
-            hint: 'correo@ejemplo.com',
-          ),
-          const SizedBox(height: 14),
-          _LoginInput(
-            label: 'Contrasena',
-            controller: passwordController,
-            focusNode: passwordFocus,
-            enabled: !isLoading,
-            obscureText: obscurePassword,
-            icon: Icons.lock_outline_rounded,
-            hint: '••••••••',
-            suffix: IconButton(
-              icon: Icon(
-                obscurePassword
-                    ? Icons.visibility_outlined
-                    : Icons.visibility_off_outlined,
-              ),
-              onPressed: onTogglePassword,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: isLoading ? null : onForgotPassword,
-              child: const Text('Recuperar acceso'),
-            ),
-          ),
-          if (error != null) ...[
-            const SizedBox(height: 8),
-            _ErrorBanner(message: error!),
-          ],
-          const SizedBox(height: 18),
-          _PrimaryAuthButton(
-            isLoading: isLoading,
-            label: 'Iniciar sesion',
-            onPressed: onSignIn,
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              const Expanded(child: Divider()),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text('o continua con', style: theme.textTheme.bodySmall),
-              ),
-              const Expanded(child: Divider()),
-            ],
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 52,
-            child: OutlinedButton.icon(
-              onPressed: isLoading ? null : onGoogleSignIn,
-              icon: const Icon(Icons.g_mobiledata_rounded, size: 30),
-              label: const Text('Google'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.textPrimary,
-                backgroundColor: AppColors.surfaceElevated,
-                side: const BorderSide(color: AppColors.divider, width: 1.2),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LoginInput extends StatelessWidget {
-  final String label;
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final bool enabled;
-  final bool obscureText;
-  final TextInputType keyboardType;
-  final IconData icon;
-  final String hint;
-  final Widget? suffix;
-
-  const _LoginInput({
-    required this.label,
-    required this.controller,
-    required this.focusNode,
-    required this.enabled,
-    required this.icon,
-    required this.hint,
-    this.obscureText = false,
-    this.keyboardType = TextInputType.text,
-    this.suffix,
+  const _LoginHero({
+    required this.textPrimary,
+    required this.textSecondary,
   });
 
   @override
@@ -454,26 +299,36 @@ class _LoginInput extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Container(
+          width: 68,
+          height: 68,
+          decoration: BoxDecoration(
+            gradient: AppColors.primaryGradient,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: AppColors.primaryShadow,
+          ),
+          child: const Icon(
+            Icons.sports_esports_rounded,
+            color: Colors.white,
+            size: 34,
+          ),
+        ),
+        const SizedBox(height: 24),
         Text(
-          label,
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 13,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0,
+          'PREMADE',
+          style: TextStyle(
+            color: textPrimary,
+            fontSize: 34,
+            fontWeight: FontWeight.w900,
           ),
         ),
         const SizedBox(height: 8),
-        TextField(
-          controller: controller,
-          focusNode: focusNode,
-          enabled: enabled,
-          obscureText: obscureText,
-          keyboardType: keyboardType,
-          decoration: InputDecoration(
-            hintText: hint,
-            prefixIcon: Icon(icon),
-            suffixIcon: suffix,
+        Text(
+          'Encuentra duo, crea equipo y habla con jugadores que encajan contigo.',
+          style: TextStyle(
+            color: textSecondary,
+            fontSize: 15,
+            height: 1.4,
           ),
         ),
       ],
@@ -481,64 +336,59 @@ class _LoginInput extends StatelessWidget {
   }
 }
 
-class _HeroIconTile extends StatelessWidget {
-  final IconData icon;
-
-  const _HeroIconTile({required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
-      ),
-      child: Icon(icon, color: Colors.white, size: 22),
-    );
-  }
-}
-
-class _PrimaryAuthButton extends StatelessWidget {
-  final bool isLoading;
+class _AuthField extends StatelessWidget {
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final bool enabled;
   final String label;
-  final VoidCallback onPressed;
+  final String hint;
+  final IconData icon;
+  final Color fillColor;
+  final TextInputType? keyboardType;
+  final bool obscureText;
+  final Widget? suffix;
 
-  const _PrimaryAuthButton({
-    required this.isLoading,
+  const _AuthField({
+    required this.controller,
+    required this.focusNode,
+    required this.enabled,
     required this.label,
-    required this.onPressed,
+    required this.hint,
+    required this.icon,
+    required this.fillColor,
+    this.keyboardType,
+    this.obscureText = false,
+    this.suffix,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 54,
-      decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: AppColors.primaryShadow,
-      ),
-      child: ElevatedButton(
-        onPressed: isLoading ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          disabledBackgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    return TextField(
+      controller: controller,
+      focusNode: focusNode,
+      enabled: enabled,
+      keyboardType: keyboardType,
+      obscureText: obscureText,
+      textInputAction: TextInputAction.next,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: Icon(icon),
+        suffixIcon: suffix,
+        filled: true,
+        fillColor: fillColor,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
         ),
-        child: isLoading
-            ? const SizedBox(
-                height: 22,
-                width: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              )
-            : Text(label),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.4),
+        ),
       ),
     );
   }
@@ -554,9 +404,9 @@ class _ErrorBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.error.withValues(alpha: 0.10),
-        border: Border.all(color: AppColors.error.withValues(alpha: 0.25)),
-        borderRadius: BorderRadius.circular(8),
+        color: AppColors.error.withAlpha(20),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.error.withAlpha(70)),
       ),
       child: Row(
         children: [
@@ -567,7 +417,6 @@ class _ErrorBanner extends StatelessWidget {
               message,
               style: const TextStyle(
                 color: AppColors.error,
-                fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -576,38 +425,4 @@ class _ErrorBanner extends StatelessWidget {
       ),
     );
   }
-}
-
-class _HeroLinesPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final thinLine = Paint()
-      ..color = Colors.white.withValues(alpha: 0.07)
-      ..strokeWidth = 1;
-    final accentLine = Paint()
-      ..color = AppColors.accent.withValues(alpha: 0.28)
-      ..strokeWidth = 2;
-
-    for (var x = -size.height; x < size.width; x += 42) {
-      canvas.drawLine(
-        Offset(x.toDouble(), size.height),
-        Offset(x + size.height, 0),
-        thinLine,
-      );
-    }
-
-    canvas.drawLine(
-      Offset(size.width * 0.56, 0),
-      Offset(size.width, size.height * 0.48),
-      accentLine,
-    );
-    canvas.drawLine(
-      Offset(size.width * 0.74, 0),
-      Offset(size.width, size.height * 0.28),
-      accentLine,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

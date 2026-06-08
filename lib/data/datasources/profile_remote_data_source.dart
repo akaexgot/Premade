@@ -28,33 +28,25 @@ class ProfileRemoteDataSourceImpl implements ProfileRemoteDataSource {
       }
 
       return UserProfile(
-        id: profile['id']?.toString() ?? '',
-        email: profile['email']?.toString() ?? '',
-        nickname: profile['nickname']?.toString() ?? 'Usuario',
-        age: profile['age'] ?? 0,
-        country: profile['country']?.toString() ?? '',
-        autonomousRegion: profile['autonomous_region']?.toString(),
-        province: profile['province']?.toString(),
-        avatarUrl: profile['avatar_url']?.toString(),
-        bio: profile['bio']?.toString(),
-        discordUsername: profile['discord_username']?.toString(),
-        isOnline: profile['is_online'] ?? false,
-        // Handle null last_seen_at gracefully
-        lastSeenAt: profile['last_seen_at'] != null
-            ? DateTime.tryParse(profile['last_seen_at'].toString()) ??
-                DateTime.now()
-            : DateTime.now(),
-        isVerified: profile['is_verified'] ?? false,
-        createdAt: profile['created_at'] != null
-            ? DateTime.tryParse(profile['created_at'].toString()) ??
-                DateTime.now()
-            : DateTime.now(),
+        id: profile['id'],
+        email: profile['email'],
+        nickname: profile['nickname'],
+        age: profile['age'],
+        country: profile['country'],
+        autonomousRegion: profile['autonomous_region'],
+        province: profile['province'],
+        avatarUrl: profile['avatar_url'],
+        bio: profile['bio'],
+        discordUsername: profile['discord_username'],
+        isOnline: profile['is_online'],
+        lastSeenAt: DateTime.parse(profile['last_seen_at']),
+        isVerified: profile['is_verified'],
+        createdAt: DateTime.parse(profile['created_at']),
         updatedAt: profile['updated_at'] != null
-            ? DateTime.tryParse(profile['updated_at'].toString())
+            ? DateTime.parse(profile['updated_at'])
             : null,
       );
     } catch (e) {
-      print('DEBUG ProfileRemoteDataSource.getUserProfile error: $e');
       rethrow;
     }
   }
@@ -71,8 +63,8 @@ class ProfileRemoteDataSourceImpl implements ProfileRemoteDataSource {
         province: params.province,
       );
 
-      // Obtener el perfil actualizado usando currentUserId (auth UUID)
-      final currentUserId = supabaseService.currentUserId;
+      // Obtener el perfil actualizado
+      final currentUserId = supabaseService.getCurrentUser()?.id;
       if (currentUserId == null) throw Exception('Usuario no autenticado');
 
       return await getUserProfile(currentUserId);
@@ -88,7 +80,6 @@ class ProfileRemoteDataSourceImpl implements ProfileRemoteDataSource {
         filePath: params.filePath,
         fileName: params.fileName,
       );
-      await supabaseService.updateUserProfile(avatarUrl: avatarUrl);
       return avatarUrl;
     } catch (e) {
       rethrow;
@@ -116,33 +107,31 @@ class ProfileRemoteDataSourceImpl implements ProfileRemoteDataSource {
   @override
   Future<List<UserGameSelection>> getUserGames(String userId) async {
     try {
-      final games = await supabaseService.getUserGames();
-      return games.map((g) {
-        final game = g['game'];
-        final primaryRank = g['primary_rank'];
-        final mainRole = g['main_role'];
-
-        return UserGameSelection(
-          gameId: g['game_id']?.toString() ?? '',
-          gameName: game?['title']?.toString() ?? 'Juego',
-          primaryRankId: g['primary_rank_id']?.toString(),
-          primaryRankName: primaryRank?['rank_tier']?.toString() ??
-              primaryRank?['tier']?.toString() ??
-              primaryRank?['name']?.toString(),
-          secondaryRankId: g['secondary_rank_id']?.toString(),
-          secondaryRankName: null,
-          mainRoleId: g['main_role_id']?.toString(),
-          mainRoleName: mainRole?['role_name']?.toString() ??
-              mainRole?['name']?.toString(),
-          secondaryRoleId: g['secondary_role_id']?.toString(),
-          secondaryRoleName: null,
-          isCasualOnly: g['is_casual_only'] ?? false,
-          playedHours: g['played_hours'] ?? 0,
-          skillNotes: g['skill_notes']?.toString(),
-        );
-      }).toList();
+      final games = await supabaseService.getUserGames(userId);
+      return games
+          .map((g) => UserGameSelection(
+                gameId: g['game_id'],
+                gameName: g['game']?['title'] ?? 'Unknown',
+                primaryRankId: g['primary_rank_id'],
+                primaryRankName: g['primary_rank']?['rank_tier'] ??
+                    g['primary_rank']?['tier'] ??
+                    g['primary_rank']?['name'],
+                secondaryRankId: g['secondary_rank_id'],
+                secondaryRankName: g['secondary_rank']?['rank_tier'] ??
+                    g['secondary_rank']?['tier'] ??
+                    g['secondary_rank']?['name'],
+                mainRoleId: g['main_role_id'],
+                mainRoleName:
+                    g['main_role']?['role_name'] ?? g['main_role']?['name'],
+                secondaryRoleId: g['secondary_role_id'],
+                secondaryRoleName: g['secondary_role']?['role_name'] ??
+                    g['secondary_role']?['name'],
+                isCasualOnly: g['is_casual_only'],
+                playedHours: g['played_hours'] ?? 0,
+                skillNotes: g['skill_notes'],
+              ))
+          .toList();
     } catch (e) {
-      print('DEBUG ProfileRemoteDataSource.getUserGames error: $e');
       rethrow;
     }
   }

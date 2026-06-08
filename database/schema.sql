@@ -38,6 +38,10 @@ CREATE TABLE IF NOT EXISTS public.users (
   last_seen_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   availability JSONB DEFAULT '{}', -- JSON con disponibilidad semanal
   gaming_style TEXT, -- Descripción del estilo de juego
+  role VARCHAR(20) DEFAULT 'member' CHECK (role IN ('admin', 'moderator', 'member')),
+  banned_at TIMESTAMP WITH TIME ZONE,
+  ban_reason TEXT,
+  banned_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
   is_verified BOOLEAN DEFAULT FALSE,
   is_reported BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
